@@ -1,0 +1,41 @@
+keephippo
+Copyright (c) 2026 Jason Figge
+
+Licensed under the Mozilla Public License, Version 2.0 (the "License"); you may
+not use this project except in compliance with the License. A copy of the
+License is in the LICENSE file, and is also available at
+https://www.mozilla.org/en-US/MPL/2.0/.
+
+--------------------------------------------------------------------------------
+Provenance & clean-room statement
+--------------------------------------------------------------------------------
+
+keephippo is an independent, clean-room implementation of a Vault-compatible
+HTTP API. It is not affiliated with, endorsed by, or derived from the source
+code of HashiCorp Vault (BUSL-1.1). It is implemented against the public HTTP
+API specification, using the MPL-2.0 licensed OpenBao project
+(https://openbao.org) as a reference where needed.
+
+Any individual source file adapted from an MPL-2.0 work retains that file's
+original MPL-2.0 header and copyright, per the license's file-level copyleft.
+As of this scaffold, no such files have been adapted.
+
+--------------------------------------------------------------------------------
+Third-party dependencies
+--------------------------------------------------------------------------------
+
+Current:
+  - github.com/spf13/cobra                Apache-2.0
+  - github.com/spf13/pflag                BSD-3-Clause
+  - github.com/inconshreveable/mousetrap  Apache-2.0
+
+Planned MPL-2.0 framework dependencies (each retains its own license/copyright,
+reproduced with the dependency in the Go module cache and in binary credits):
+  - github.com/openbao/openbao/sdk        MPL-2.0
+  - github.com/openbao/openbao/api        MPL-2.0
+  - github.com/hashicorp/hcl/v2           MPL-2.0
+  - github.com/hashicorp/go-hclog         MPL-2.0
+  - github.com/hashicorp/raft             MPL-2.0
+
+"Vault" and "HashiCorp" are trademarks of their respective owners. "Vault-
+compatible" is used here only as a factual description of wire compatibility.

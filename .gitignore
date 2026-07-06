@@ -1,0 +1,29 @@
+# Build artifacts
+/build/
+/dist/
+
+# Local env files (see the *.example templates)
+/dev.env
+/release.env
+
+# Secrets, tokens, keys — never commit
+*.token
+.keephippo-token
+*.pem
+*.key
+*.crt
+*.pfx
+*.p8
+
+# Coverage & profiling
+*.out
+coverage.*
+
+# Editors / OS
+.idea/
+.vscode/
+/features/
+.DS_Store
+
+# Go
+/vendor/

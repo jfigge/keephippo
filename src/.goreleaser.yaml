@@ -1,0 +1,54 @@
+# GoReleaser configuration. Validate with `goreleaser check`.
+# https://goreleaser.com
+version: 2
+
+project_name: keephippo
+
+# Artifacts land in the repo-root dist/ (this config runs from src/).
+dist: ../dist
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: keephippo
+    main: ./cmd/keephippo
+    binary: keephippo
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/jfigge/keephippo/internal/version.Version={{ .Version }}
+      - -X github.com/jfigge/keephippo/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/jfigge/keephippo/internal/version.Branch={{ .Branch }}
+      - -X github.com/jfigge/keephippo/internal/version.BuildTime={{ .Date }}
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  use: github
+  sort: asc
+
+release:
+  github:
+    owner: jfigge
+    name: keephippo
+  draft: true
+  prerelease: auto
