@@ -159,6 +159,152 @@ func (c *Client) MountRemount(from, to string) error {
 	return c.do(http.MethodPost, "/v1/sys/remount", map[string]string{"from": from, "to": to}, nil)
 }
 
+// --- policies ---
+
+// PolicyWrite creates or updates an ACL policy from HCL source.
+func (c *Client) PolicyWrite(name, rules string) error {
+	return c.do(http.MethodPut, "/v1/sys/policies/acl/"+name, map[string]string{"policy": rules}, nil)
+}
+
+// PolicyRead returns an ACL policy's HCL source, or ("", nil) if absent.
+func (c *Client) PolicyRead(name string) (string, error) {
+	var s Secret
+	status, err := c.doStatus(http.MethodGet, "/v1/sys/policies/acl/"+name, nil, &s)
+	if err != nil {
+		if status == http.StatusNotFound {
+			return "", nil
+		}
+		return "", err
+	}
+	rules, _ := s.Data["policy"].(string)
+	return rules, nil
+}
+
+// PolicyList returns the ACL policy names.
+func (c *Client) PolicyList() ([]string, error) {
+	var s Secret
+	if err := c.do("LIST", "/v1/sys/policies/acl", nil, &s); err != nil {
+		return nil, err
+	}
+	return stringsFromAny(s.Data["keys"]), nil
+}
+
+// PolicyDelete removes an ACL policy.
+func (c *Client) PolicyDelete(name string) error {
+	return c.do(http.MethodDelete, "/v1/sys/policies/acl/"+name, nil, nil)
+}
+
+// --- tokens ---
+
+// AuthInfo is the auth block returned by token create/renew and login.
+type AuthInfo struct {
+	ClientToken   string   `json:"client_token"`
+	Accessor      string   `json:"accessor"`
+	Policies      []string `json:"policies"`
+	TokenPolicies []string `json:"token_policies"`
+	LeaseDuration int64    `json:"lease_duration"`
+	Renewable     bool     `json:"renewable"`
+}
+
+// TokenCreateRequest configures TokenCreate.
+type TokenCreateRequest struct {
+	Policies    []string
+	TTL         string
+	NumUses     int
+	DisplayName string
+	NoDefault   bool
+}
+
+// TokenCreate mints a new token.
+func (c *Client) TokenCreate(r TokenCreateRequest) (*AuthInfo, error) {
+	body := map[string]any{}
+	if len(r.Policies) > 0 {
+		body["policies"] = r.Policies
+	}
+	if r.TTL != "" {
+		body["ttl"] = r.TTL
+	}
+	if r.NumUses > 0 {
+		body["num_uses"] = r.NumUses
+	}
+	if r.DisplayName != "" {
+		body["display_name"] = r.DisplayName
+	}
+	if r.NoDefault {
+		body["no_default_policy"] = true
+	}
+	var out struct {
+		Auth *AuthInfo `json:"auth"`
+	}
+	if err := c.do(http.MethodPost, "/v1/auth/token/create", body, &out); err != nil {
+		return nil, err
+	}
+	return out.Auth, nil
+}
+
+// TokenLookup looks up a token by its ID.
+func (c *Client) TokenLookup(token string) (map[string]any, error) {
+	var s Secret
+	if err := c.do(http.MethodPost, "/v1/auth/token/lookup", map[string]string{"token": token}, &s); err != nil {
+		return nil, err
+	}
+	return s.Data, nil
+}
+
+// TokenLookupSelf looks up the client's own token.
+func (c *Client) TokenLookupSelf() (map[string]any, error) {
+	var s Secret
+	if err := c.do(http.MethodGet, "/v1/auth/token/lookup-self", nil, &s); err != nil {
+		return nil, err
+	}
+	return s.Data, nil
+}
+
+// TokenRenew extends a token's TTL.
+func (c *Client) TokenRenew(token, increment string) (*AuthInfo, error) {
+	body := map[string]any{"token": token}
+	if increment != "" {
+		body["increment"] = increment
+	}
+	var out struct {
+		Auth *AuthInfo `json:"auth"`
+	}
+	if err := c.do(http.MethodPost, "/v1/auth/token/renew", body, &out); err != nil {
+		return nil, err
+	}
+	return out.Auth, nil
+}
+
+// TokenRevoke revokes a token by its ID.
+func (c *Client) TokenRevoke(token string) error {
+	return c.do(http.MethodPost, "/v1/auth/token/revoke", map[string]string{"token": token}, nil)
+}
+
+// CapabilitiesSelf reports the calling token's capabilities on path.
+func (c *Client) CapabilitiesSelf(path string) ([]string, error) {
+	var s Secret
+	if err := c.do(http.MethodPost, "/v1/sys/capabilities-self", map[string]any{"paths": []string{path}}, &s); err != nil {
+		return nil, err
+	}
+	return stringsFromAny(s.Data["capabilities"]), nil
+}
+
+func stringsFromAny(v any) []string {
+	switch t := v.(type) {
+	case []string:
+		return t
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, e := range t {
+			if s, ok := e.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
+}
+
 // ListMounts returns the mount table keyed by mount path.
 func (c *Client) ListMounts() (map[string]any, error) {
 	var out Secret

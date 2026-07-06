@@ -54,6 +54,7 @@ func TestSysEndpointsLifecycle(t *testing.T) {
 		t.Fatalf("init body = %v", body)
 	}
 	key0, _ := keys[0].(string)
+	root, _ := body["root_token"].(string)
 
 	// Health while sealed → 503; catch-all under /v1 while sealed → 503.
 	if rec, _ := do(t, h, "GET", "/v1/sys/health", nil); rec.Code != http.StatusServiceUnavailable {
@@ -78,8 +79,8 @@ func TestSysEndpointsLifecycle(t *testing.T) {
 		t.Fatalf("logical(unsealed, no token) = %d; want 400", rec.Code)
 	}
 
-	// Seal → 204; seal-status reflects it.
-	if rec, _ := do(t, h, "PUT", "/v1/sys/seal", nil); rec.Code != http.StatusNoContent {
+	// Seal (now authenticated + sudo) → 204; seal-status reflects it.
+	if rec, _ := doTok(t, h, "PUT", "/v1/sys/seal", root, nil); rec.Code != http.StatusNoContent {
 		t.Fatalf("seal = %d; want 204", rec.Code)
 	}
 	if _, body := do(t, h, "GET", "/v1/sys/seal-status", nil); body["sealed"] != true {

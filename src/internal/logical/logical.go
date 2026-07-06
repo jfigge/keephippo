@@ -32,6 +32,18 @@ type Request struct {
 // is a not-found (404); for a write/delete it is success with no content (204).
 type Response struct {
 	Data map[string]any
+	Auth *Auth
+}
+
+// Auth is the authentication result returned by token creation and login,
+// rendered into the envelope's "auth" field.
+type Auth struct {
+	ClientToken   string   `json:"client_token"`
+	Accessor      string   `json:"accessor"`
+	Policies      []string `json:"policies"`
+	TokenPolicies []string `json:"token_policies"`
+	LeaseDuration int64    `json:"lease_duration"`
+	Renewable     bool     `json:"renewable"`
 }
 
 // Backend is a secrets engine or auth method.

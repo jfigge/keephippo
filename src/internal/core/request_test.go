@@ -135,3 +135,52 @@ func TestRemountPreservesData(t *testing.T) {
 		t.Fatalf("read at new path = %v, %v", resp, err)
 	}
 }
+
+func TestAuthorizeScopedPolicy(t *testing.T) {
+	c, root := setupUnsealed(t)
+	if err := c.EnableMount("secret", "kv"); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+	rootReq := func(op logical.Operation, path string, data map[string]any) (*logical.Response, error) {
+		return c.HandleRequest(&logical.Request{Operation: op, Path: path, Data: data, ClientToken: root})
+	}
+
+	if _, err := rootReq(logical.CreateOperation, "secret/data/app/x", map[string]any{"a": "b"}); err != nil {
+		t.Fatalf("seed secret: %v", err)
+	}
+	// Write a scoped policy: read+list on secret/data/app/*.
+	if _, err := rootReq(logical.UpdateOperation, "sys/policies/acl/app", map[string]any{
+		"policy": `path "secret/data/app/*" { capabilities = ["read", "list"] }`,
+	}); err != nil {
+		t.Fatalf("write policy: %v", err)
+	}
+	// Mint a token bound to it.
+	created, err := rootReq(logical.UpdateOperation, "auth/token/create", map[string]any{"policies": []any{"app"}})
+	if err != nil || created.Auth == nil {
+		t.Fatalf("token create = %v, %v", created, err)
+	}
+	scoped := created.Auth.ClientToken
+
+	scopedReq := func(op logical.Operation, path string, data map[string]any) (*logical.Response, error) {
+		return c.HandleRequest(&logical.Request{Operation: op, Path: path, Data: data, ClientToken: scoped})
+	}
+
+	// Can read the allowed path.
+	if r, err := scopedReq(logical.ReadOperation, "secret/data/app/x", nil); err != nil || r == nil || r.Data["a"] != "b" {
+		t.Fatalf("scoped read = %v, %v", r, err)
+	}
+	// Cannot write there.
+	_, err = scopedReq(logical.UpdateOperation, "secret/data/app/x", map[string]any{"a": "c"})
+	assertCoded(t, err, 403)
+	// Denied everywhere else.
+	_, err = scopedReq(logical.ReadOperation, "secret/other", nil)
+	assertCoded(t, err, 403)
+	// But self endpoints always work.
+	if _, err := scopedReq(logical.ReadOperation, "auth/token/lookup-self", nil); err != nil {
+		t.Fatalf("lookup-self denied: %v", err)
+	}
+	// Root still has full access.
+	if r, err := rootReq(logical.ReadOperation, "secret/data/app/x", nil); err != nil || r == nil {
+		t.Fatalf("root read = %v, %v", r, err)
+	}
+}

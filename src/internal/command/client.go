@@ -2,6 +2,8 @@ package command
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -15,20 +17,37 @@ func addClientFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().Bool("tls-skip-verify", false, "Disable TLS certificate verification (insecure)")
 }
 
-// newClient builds an API client from the connection flags and environment.
-// Precedence for the address: --address, then KEEPHIPPO_ADDR, then VAULT_ADDR,
-// then the default http://127.0.0.1:8200.
+// newClient builds an API client from the connection flags, environment, and
+// stored token.
 func newClient(cmd *cobra.Command) (*api.Client, error) {
-	addr, _ := cmd.Flags().GetString("address")
-	if addr == "" {
-		addr = firstEnv("KEEPHIPPO_ADDR", "VAULT_ADDR")
-	}
+	return newClientWithToken(cmd, resolveToken())
+}
+
+func newClientWithToken(cmd *cobra.Command, token string) (*api.Client, error) {
 	skip, _ := cmd.Flags().GetBool("tls-skip-verify")
 	return api.NewClient(api.Config{
-		Address:       addr,
-		Token:         firstEnv("KEEPHIPPO_TOKEN", "VAULT_TOKEN"),
+		Address:       resolveAddr(cmd),
+		Token:         token,
 		TLSSkipVerify: skip,
 	})
+}
+
+// resolveAddr resolves the server address: --address, then KEEPHIPPO_ADDR, then
+// VAULT_ADDR (the client defaults to http://127.0.0.1:8200 if all are empty).
+func resolveAddr(cmd *cobra.Command) string {
+	if addr, _ := cmd.Flags().GetString("address"); addr != "" {
+		return addr
+	}
+	return firstEnv("KEEPHIPPO_ADDR", "VAULT_ADDR")
+}
+
+// resolveToken resolves the client token: KEEPHIPPO_TOKEN, then VAULT_TOKEN,
+// then the token stored by `keephippo login`.
+func resolveToken() string {
+	if t := firstEnv("KEEPHIPPO_TOKEN", "VAULT_TOKEN"); t != "" {
+		return t
+	}
+	return readStoredToken()
 }
 
 func firstEnv(keys ...string) string {
@@ -38,4 +57,26 @@ func firstEnv(keys ...string) string {
 		}
 	}
 	return ""
+}
+
+// --- token helper (like Vault's ~/.vault-token) ---
+
+func tokenHelperPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ".keephippo-token"
+	}
+	return filepath.Join(home, ".keephippo-token")
+}
+
+func storeToken(token string) error {
+	return os.WriteFile(tokenHelperPath(), []byte(token), 0o600)
+}
+
+func readStoredToken() string {
+	b, err := os.ReadFile(tokenHelperPath())
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }
