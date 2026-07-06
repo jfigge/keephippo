@@ -25,8 +25,9 @@ their definitions of done.
 | Phase | Scope | State |
 |------:|-------|-------|
 | 0 | Scaffolding · Makefile · CI · `keephippo` binary | ✅ done |
-| 1 | Storage · barrier · Shamir seal/unseal | ⬜ next |
-| 2–4 | Mounts · KV v1 · policies · full CLI | ⬜ |
+| 1 | Storage · barrier · Shamir seal/unseal | ✅ done |
+| 2 | Mounts · HTTP core · KV v1 · token auth | ⬜ next |
+| 3–4 | Policies · full CLI | ⬜ |
 | 5–7 | userpass/approle · KV v2 · leases/transit · audit/wrapping | ⬜ |
 | 8–9 | Raft HA · auto-unseal · identity · Web UI | ⬜ |
 

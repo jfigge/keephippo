@@ -6,6 +6,13 @@ linters:
   default: standard
   enable:
     - misspell
+  settings:
+    errcheck:
+      # Writes to stdout/stderr in CLI output are conventionally unchecked.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
 
 formatters:
   enable:

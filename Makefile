@@ -63,10 +63,10 @@ install: ## Download deps and install dev tools (gofumpt, golangci-lint, govulnc
 	$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
 	$(GO) install github.com/goreleaser/goreleaser/v2@latest
 
-debug: ## Run a dev server (in-mem, auto-unseal) — stub until Phase 1
-	$(GO) -C $(SRC) run $(PKG) server -dev
+debug: ## Run a dev server (in-mem storage, auto-unsealed)
+	$(GO) -C $(SRC) run $(PKG) server --dev
 
-dev: debug ## Alias for debug (prints root token + unseal key) — stub until Phase 1
+dev: debug ## Alias for debug (prints root token + unseal key)
 
 # ---- quality ----
 fmt: ## Format code (gofumpt if available, else gofmt)

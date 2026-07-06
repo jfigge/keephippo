@@ -7,11 +7,11 @@ A living matrix of Vault-compatible endpoints keephippo implements. Status:
 
 | Endpoint | Status | Phase | Notes |
 |----------|:------:|:-----:|-------|
-| `sys/health` | ⬜ | 1 | |
-| `sys/seal-status` | ⬜ | 1 | |
-| `sys/init` | ⬜ | 1 | |
-| `sys/unseal` | ⬜ | 1 | |
-| `sys/seal` | ⬜ | 1 | |
+| `sys/health` | ✅ | 1 | 200/503/501 status codes |
+| `sys/seal-status` | ✅ | 1 | |
+| `sys/init` | ✅ | 1 | Shamir shares + root token |
+| `sys/unseal` | ✅ | 1 | supports `reset` |
+| `sys/seal` | ✅ | 1 | auth enforced from Phase 3 |
 | `sys/mounts` | ⬜ | 2 | list/enable/disable secret engines |
 | `sys/remount` | ⬜ | 2 | |
 | `sys/auth` | ⬜ | 5 | list/enable/disable auth methods |
@@ -42,7 +42,7 @@ A living matrix of Vault-compatible endpoints keephippo implements. Status:
 
 | Item | Status | Notes |
 |------|:------:|-------|
-| `/v1/` path prefix | ⬜ | |
-| `X-Vault-Token` header | ⬜ | also accept `KEEPHIPPO_TOKEN` env |
-| Standard JSON envelope | ⬜ | `request_id`, `lease_id`, `data`, … |
-| Status codes | ⬜ | 200/204/400/403/404/429/503 |
+| `/v1/` path prefix | ✅ | |
+| `X-Vault-Token` header | 🚧 | sent by client; enforced from Phase 3 |
+| Standard JSON envelope | ⬜ | logical endpoints, Phase 2 |
+| Status codes | 🚧 | 200/204/400/404/501/503 wired; 403/429 later |
