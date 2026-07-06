@@ -39,10 +39,11 @@ type Lease struct {
 // expirationManager persists leases and runs a background revoker that removes
 // leases (and their tokens) once expired.
 type expirationManager struct {
-	barrier *barrier.Barrier
-	tokens  *tokenStore
-	nowFn   func() time.Time
-	tick    time.Duration
+	barrier  *barrier.Barrier
+	tokens   *tokenStore
+	nowFn    func() time.Time
+	tick     time.Duration
+	onRevoke func(tokenID string) // hook to purge a revoked token's cubbyhole
 
 	mu      sync.Mutex
 	stopCh  chan struct{}
@@ -233,6 +234,9 @@ func (em *expirationManager) revokeLocked(id string) error {
 	}
 	if err := em.tokens.revoke(l.TokenID); err != nil {
 		return err
+	}
+	if em.onRevoke != nil {
+		em.onRevoke(l.TokenID)
 	}
 	return em.barrier.Delete(leaseStorageKey(id))
 }

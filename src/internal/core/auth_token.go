@@ -28,13 +28,20 @@ func (c *Core) handleTokenAuth(req *logical.Request, caller *TokenEntry) (*logic
 	case "revoke":
 		return nil, c.tokenRevoke(stringField(req.Data, "token"))
 	case "revoke-self":
-		return nil, c.tokens.revoke(req.ClientToken)
+		return nil, c.revokeToken(req.ClientToken)
 	case "revoke-accessor":
 		acc := stringField(req.Data, "accessor")
 		if acc == "" {
 			return nil, &CodedError{Status: 400, Message: "missing accessor"}
 		}
-		return nil, c.tokens.revokeAccessor(acc)
+		te, err := c.tokens.lookupAccessor(acc)
+		if err != nil {
+			return nil, err
+		}
+		if te == nil {
+			return nil, &CodedError{Status: 400, Message: "invalid accessor"}
+		}
+		return nil, c.revokeToken(te.ID)
 	default:
 		return nil, &CodedError{Status: 404, Message: fmt.Sprintf("unsupported path %q", req.Path)}
 	}
@@ -114,10 +121,7 @@ func (c *Core) tokenRenew(id string, data map[string]any) (*logical.Response, er
 }
 
 func (c *Core) tokenRevoke(id string) error {
-	if id == "" {
-		return &CodedError{Status: 400, Message: "missing token"}
-	}
-	return c.tokens.revoke(id)
+	return c.revokeToken(id)
 }
 
 func (c *Core) authFor(te *TokenEntry) *logical.Auth {

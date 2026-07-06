@@ -21,9 +21,9 @@ func newAuditCmd() *cobra.Command {
 func newAuditEnableCmd() *cobra.Command {
 	var path string
 	cmd := &cobra.Command{
-		Use:   "enable [-path=PATH] TYPE",
-		Short: "Enable an audit device",
-		Args:  cobra.ExactArgs(1),
+		Use:   "enable [-path=PATH] TYPE [KEY=VALUE...]",
+		Short: "Enable an audit device (e.g. audit enable file file_path=/var/log/kh.log)",
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := newClient(cmd)
 			if err != nil {
@@ -34,7 +34,12 @@ func newAuditEnableCmd() *cobra.Command {
 			if p == "" {
 				p = typ
 			}
-			if _, err := c.Do(http.MethodPost, "/v1/sys/audit/"+p, map[string]string{"type": typ}); err != nil {
+			body, err := parseKV(args[1:])
+			if err != nil {
+				return err
+			}
+			body["type"] = typ
+			if _, err := c.Do(http.MethodPost, "/v1/sys/audit/"+p, body); err != nil {
 				return err
 			}
 			success(cmd, "Success! Enabled the %s audit device at: %s/\n", typ, p)

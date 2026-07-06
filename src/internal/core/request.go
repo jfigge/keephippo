@@ -28,7 +28,23 @@ func (c *Core) HandleRequest(req *logical.Request) (*logical.Response, error) {
 	if c.barrier.Sealed() {
 		return nil, &CodedError{Status: 503, Message: "keephippo is sealed"}
 	}
+	// Audit the request before doing any work; fail closed if logging fails.
+	if err := c.auditRequest(req); err != nil {
+		return nil, err
+	}
+	resp, err := c.handleInner(req)
+	if aerr := c.auditResponse(req, resp, err); aerr != nil {
+		return nil, aerr
+	}
+	if err == nil && req.WrapTTL > 0 {
+		return c.wrapResponse(req, resp)
+	}
+	return resp, err
+}
 
+// handleInner authenticates the token, enforces the ACL, and dispatches to the
+// system backend, the token backend, an auth method, or a secrets engine.
+func (c *Core) handleInner(req *logical.Request) (*logical.Response, error) {
 	// Login fast-path: an auth method may declare some of its paths (the login
 	// paths) reachable without a token. These bypass the token guard and ACL;
 	// the backend verifies the credential and core mints the token.
@@ -161,6 +177,10 @@ func requiredCaps(op logical.Operation) []policy.Capability {
 func isSelfPath(path string) bool {
 	switch path {
 	case "auth/token/lookup-self", "auth/token/renew-self", "auth/token/revoke-self", "sys/capabilities-self":
+		return true
+	// Unwrapping/looking up a wrapping token is done by presenting that token,
+	// which is itself the secret — so these bypass the ACL (matching Vault).
+	case "sys/wrapping/unwrap", "sys/wrapping/lookup":
 		return true
 	}
 	return false

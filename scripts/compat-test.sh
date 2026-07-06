@@ -73,4 +73,12 @@ if [[ "$OUT" != "compat-secret" ]]; then echo "transit decrypt mismatch: $OUT" >
 "$CLI" write -field=ciphertext transit/rewrap/demo ciphertext="$CT" >/dev/null
 echo "   transit encrypt/decrypt/rotate/rewrap OK"
 
+# --- response wrapping: wrap a read with the foreign CLI, unwrap it once ---
+echo "-- $CLI response wrapping against keephippo --"
+WRAP=$("$CLI" read -wrap-ttl=120s -field=wrapping_token secret/compat)
+UNWRAPPED=$("$CLI" unwrap -field=greeting "$WRAP")
+if [[ "$UNWRAPPED" != "hello" ]]; then echo "unwrap mismatch: $UNWRAPPED" >&2; exit 1; fi
+if "$CLI" unwrap "$WRAP" >/dev/null 2>&1; then echo "second unwrap unexpectedly succeeded" >&2; exit 1; fi
+echo "   wrap read + single-use unwrap OK"
+
 echo "==> Live cross-check completed."

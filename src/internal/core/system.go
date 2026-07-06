@@ -51,9 +51,17 @@ func (c *Core) handleSystem(req *logical.Request, te *TokenEntry) (*logical.Resp
 	case sub == "leases/revoke" || strings.HasPrefix(sub, "leases/revoke/"):
 		return c.sysLeaseRevoke(req, strings.TrimPrefix(sub, "leases/revoke/"))
 	case sub == "audit":
-		return &logical.Response{Data: map[string]any{}}, nil
+		return c.sysListAuditDevices(), nil
+	case strings.HasPrefix(sub, "audit-hash/"):
+		return &logical.Response{Data: map[string]any{"hash": c.AuditHash(stringField(req.Data, "input"))}}, nil
 	case strings.HasPrefix(sub, "audit/"):
-		return nil, &CodedError{Status: 400, Message: "audit devices are not yet supported (Phase 7)"}
+		name := strings.TrimPrefix(sub, "audit/")
+		if req.Operation == logical.DeleteOperation {
+			return nil, c.DisableAudit(name)
+		}
+		return nil, c.EnableAudit(name, stringField(req.Data, "type"), auditOptions(req.Data))
+	case strings.HasPrefix(sub, "wrapping/"):
+		return c.handleWrapping(req, strings.TrimPrefix(sub, "wrapping/"))
 	case sub == "remount":
 		return nil, c.Remount(stringField(req.Data, "from"), stringField(req.Data, "to"))
 	case sub == "seal":
@@ -178,6 +186,34 @@ func mountInfo(m *MountEntry) map[string]any {
 		"options":     opts,
 		"local":       false,
 	}
+}
+
+func (c *Core) sysListAuditDevices() *logical.Response {
+	data := map[string]any{}
+	for _, m := range c.ListAuditDevices() {
+		opts := m.Options
+		if opts == nil {
+			opts = map[string]any{}
+		}
+		data[m.Path] = map[string]any{"type": m.Type, "options": opts}
+	}
+	return &logical.Response{Data: data}
+}
+
+// auditOptions collects device options from either a nested "options" map or
+// flat top-level fields (as the CLI's key=value args produce).
+func auditOptions(data map[string]any) map[string]any {
+	opts := map[string]any{}
+	for k, v := range data {
+		if k == "type" || k == "description" || k == "options" {
+			continue
+		}
+		opts[k] = v
+	}
+	for k, v := range mapField(data, "options") {
+		opts[k] = v
+	}
+	return opts
 }
 
 func (c *Core) sysListAuth() *logical.Response {

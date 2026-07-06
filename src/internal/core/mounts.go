@@ -80,6 +80,12 @@ func (c *Core) setupMounts() error {
 		}
 		c.router[e.Path] = mb
 	}
+	if err := c.setupCubbyhole(); err != nil {
+		return err
+	}
+	if err := c.setupAudit(); err != nil {
+		return err
+	}
 	return c.setupAuth()
 }
 

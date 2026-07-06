@@ -7,7 +7,10 @@
 // independent of the OpenBao SDK's gRPC plugin framework.
 package logical
 
-import "net/url"
+import (
+	"net/url"
+	"time"
+)
 
 // Operation is the verb of a request, derived from the HTTP method.
 type Operation string
@@ -30,6 +33,11 @@ type Request struct {
 	Storage     Storage
 	// Query carries the URL query string (e.g. ?version=3), used by KV v2 reads.
 	Query url.Values
+	// WrapTTL, when > 0 (from the X-Vault-Wrap-TTL header), asks the core to
+	// wrap the response into a single-use wrapping token instead of returning it.
+	WrapTTL time.Duration
+	// RemoteAddr is the client's network address, recorded in audit logs.
+	RemoteAddr string
 }
 
 // QueryValue returns the first value for a query parameter, or "".
@@ -43,8 +51,19 @@ func (r *Request) QueryValue(key string) string {
 // Response is a backend's reply. A nil Response means "no data": for a read it
 // is a not-found (404); for a write/delete it is success with no content (204).
 type Response struct {
-	Data map[string]any
-	Auth *Auth
+	Data     map[string]any
+	Auth     *Auth
+	WrapInfo *WrapInfo
+}
+
+// WrapInfo describes a response-wrapping token returned in the envelope's
+// wrap_info field. The real payload lives in the wrapping token's cubbyhole.
+type WrapInfo struct {
+	Token        string `json:"token"`
+	Accessor     string `json:"accessor"`
+	TTL          int64  `json:"ttl"`
+	CreationTime string `json:"creation_time"`
+	CreationPath string `json:"creation_path"`
 }
 
 // Auth is the authentication result returned by token creation and login,

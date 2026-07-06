@@ -27,8 +27,21 @@ func emit(cmd *cobra.Command, resp *api.Response, tableFn func(w io.Writer)) err
 	if outputFormat(cmd) == "json" {
 		return printJSON(cmd.OutOrStdout(), resp.Raw)
 	}
+	if resp.WrapInfo != nil {
+		wrapInfoTable(cmd.OutOrStdout(), resp.WrapInfo)
+		return nil
+	}
 	tableFn(cmd.OutOrStdout())
 	return nil
+}
+
+func wrapInfoTable(w io.Writer, wi *api.WrapInfo) {
+	fmt.Fprintf(w, "%-22s%s\n", "Key", "Value")
+	fmt.Fprintf(w, "%-22s%s\n", "---", "-----")
+	fmt.Fprintf(w, "%-22s%s\n", "wrapping_token:", wi.Token)
+	fmt.Fprintf(w, "%-22s%d\n", "wrapping_token_ttl:", wi.TTL)
+	fmt.Fprintf(w, "%-22s%s\n", "wrapping_token_creation_time:", wi.CreationTime)
+	fmt.Fprintf(w, "%-22s%s\n", "wrapping_token_creation_path:", wi.CreationPath)
 }
 
 // success prints a human-readable message in table mode; json mode is silent

@@ -31,7 +31,7 @@ their definitions of done.
 | 4 | Full CLI to Vault parity (`--format=json`, all verbs) | ✅ done — **v0.1.0** |
 | 5 | userpass/approle auth · KV v2 (versioning, CAS) | ✅ done |
 | 6 | Leases + expiration manager · transit (encryption engine) | ✅ done |
-| 7 | audit devices · response wrapping · cubbyhole | ⬜ next |
+| 7 | Audit devices (HMAC, fail-closed) · response wrapping · cubbyhole | ✅ done |
 | 8–9 | Raft HA · auto-unseal · identity · Web UI | ⬜ |
 
 ## Quick start

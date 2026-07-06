@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jfigge/keephippo/internal/audit"
 	"github.com/jfigge/keephippo/internal/barrier"
 	"github.com/jfigge/keephippo/internal/physical"
 	"github.com/jfigge/keephippo/internal/seal"
@@ -39,13 +40,16 @@ type Core struct {
 	seal        *seal.ShamirSeal
 	storageType string
 
-	tokens     *tokenStore
-	policies   *policyStore
-	expiration *expirationManager
-	mounts     *mountTable
-	authMounts *mountTable
-	router     map[string]*mountedBackend // secret mounts, keyed by "<path>/"
-	authRouter map[string]*mountedBackend // auth mounts, keyed by "auth/<path>/"
+	tokens       *tokenStore
+	policies     *policyStore
+	expiration   *expirationManager
+	audit        *audit.Broker
+	auditDevices *mountTable
+	cubbyhole    *mountedBackend // built-in per-token store at cubbyhole/
+	mounts       *mountTable
+	authMounts   *mountTable
+	router       map[string]*mountedBackend // secret mounts, keyed by "<path>/"
+	authRouter   map[string]*mountedBackend // auth mounts, keyed by "auth/<path>/"
 }
 
 // New builds a sealed core over phys. storageType is reported in seal-status
@@ -53,19 +57,22 @@ type Core struct {
 func New(phys physical.Backend, storageType string) *Core {
 	b := barrier.New(phys)
 	ts := newTokenStore(b)
-	return &Core{
-		physical:    phys,
-		barrier:     b,
-		seal:        seal.NewShamir(),
-		storageType: storageType,
-		tokens:      ts,
-		policies:    newPolicyStore(b),
-		expiration:  newExpirationManager(b, ts),
-		mounts:      &mountTable{},
-		authMounts:  &mountTable{},
-		router:      make(map[string]*mountedBackend),
-		authRouter:  make(map[string]*mountedBackend),
+	c := &Core{
+		physical:     phys,
+		barrier:      b,
+		seal:         seal.NewShamir(),
+		storageType:  storageType,
+		tokens:       ts,
+		policies:     newPolicyStore(b),
+		expiration:   newExpirationManager(b, ts),
+		auditDevices: &mountTable{},
+		mounts:       &mountTable{},
+		authMounts:   &mountTable{},
+		router:       make(map[string]*mountedBackend),
+		authRouter:   make(map[string]*mountedBackend),
 	}
+	c.expiration.onRevoke = c.purgeCubbyhole
+	return c
 }
 
 // InitParams configures Shamir sharing for Initialize.

@@ -16,6 +16,7 @@ func addClientFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("address", "", "Address of the keephippo server (env KEEPHIPPO_ADDR / VAULT_ADDR)")
 	cmd.PersistentFlags().Bool("tls-skip-verify", false, "Disable TLS certificate verification (insecure)")
 	cmd.PersistentFlags().String("format", "table", `Output format: "table" or "json"`)
+	cmd.PersistentFlags().String("wrap-ttl", "", "Wrap the response in a single-use token with this TTL (e.g. 60s)")
 }
 
 // newClient builds an API client from the connection flags, environment, and
@@ -26,10 +27,12 @@ func newClient(cmd *cobra.Command) (*api.Client, error) {
 
 func newClientWithToken(cmd *cobra.Command, token string) (*api.Client, error) {
 	skip, _ := cmd.Flags().GetBool("tls-skip-verify")
+	wrapTTL, _ := cmd.Flags().GetString("wrap-ttl")
 	return api.NewClient(api.Config{
 		Address:       resolveAddr(cmd),
 		Token:         token,
 		TLSSkipVerify: skip,
+		WrapTTL:       wrapTTL,
 	})
 }
 

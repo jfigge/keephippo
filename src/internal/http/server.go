@@ -5,7 +5,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jfigge/keephippo/internal/core"
 	"github.com/jfigge/keephippo/internal/logical"
@@ -151,6 +153,8 @@ func (s *Server) handleV1(w http.ResponseWriter, r *http.Request) {
 		Path:        strings.TrimPrefix(r.URL.Path, "/v1/"),
 		ClientToken: r.Header.Get("X-Vault-Token"),
 		Query:       r.URL.Query(),
+		RemoteAddr:  r.RemoteAddr,
+		WrapTTL:     parseWrapTTL(r.Header.Get("X-Vault-Wrap-TTL")),
 	}
 	if op == logical.CreateOperation || op == logical.UpdateOperation {
 		data := map[string]any{}
@@ -171,6 +175,8 @@ func (s *Server) handleV1(w http.ResponseWriter, r *http.Request) {
 
 func renderLogical(w http.ResponseWriter, op logical.Operation, resp *logical.Response) {
 	switch {
+	case resp != nil && resp.WrapInfo != nil:
+		respondJSON(w, http.StatusOK, &Response{RequestID: requestID(), WrapInfo: resp.WrapInfo})
 	case resp != nil && resp.Auth != nil:
 		respondJSON(w, http.StatusOK, &Response{RequestID: requestID(), Data: resp.Data, Auth: resp.Auth})
 	case op == logical.ListOperation:
@@ -220,6 +226,21 @@ func operationForMethod(r *http.Request) (logical.Operation, bool) {
 	default:
 		return "", false
 	}
+}
+
+// parseWrapTTL parses the X-Vault-Wrap-TTL header (a Go duration like "60s" or a
+// bare number of seconds). Returns 0 when absent or unparseable.
+func parseWrapTTL(s string) time.Duration {
+	if s == "" {
+		return 0
+	}
+	if d, err := time.ParseDuration(s); err == nil {
+		return d
+	}
+	if n, err := strconv.Atoi(s); err == nil {
+		return time.Duration(n) * time.Second
+	}
+	return 0
 }
 
 func writeCoreError(w http.ResponseWriter, err error) {

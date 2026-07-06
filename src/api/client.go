@@ -18,13 +18,15 @@ type Config struct {
 	Address       string // e.g. http://127.0.0.1:8200
 	Token         string // sent as X-Vault-Token
 	TLSSkipVerify bool
+	WrapTTL       string // when set, sent as X-Vault-Wrap-TTL (response wrapping)
 }
 
 // Client talks to a keephippo (or Vault-compatible) server.
 type Client struct {
-	addr  string
-	token string
-	hc    *http.Client
+	addr    string
+	token   string
+	wrapTTL string
+	hc      *http.Client
 }
 
 // NewClient builds a Client from cfg, defaulting the address to
@@ -39,9 +41,10 @@ func NewClient(cfg Config) (*Client, error) {
 		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // opt-in via -tls-skip-verify
 	}
 	return &Client{
-		addr:  addr,
-		token: cfg.Token,
-		hc:    &http.Client{Timeout: 30 * time.Second, Transport: tr},
+		addr:    addr,
+		token:   cfg.Token,
+		wrapTTL: cfg.WrapTTL,
+		hc:      &http.Client{Timeout: 30 * time.Second, Transport: tr},
 	}, nil
 }
 
@@ -331,8 +334,18 @@ type Response struct {
 	RequestID  string
 	Data       map[string]any
 	Auth       *AuthInfo
+	WrapInfo   *WrapInfo
 	Warnings   []string
 	Errors     []string
+}
+
+// WrapInfo is the wrap_info block returned when a response is wrapped.
+type WrapInfo struct {
+	Token        string `json:"token"`
+	Accessor     string `json:"accessor"`
+	TTL          int64  `json:"ttl"`
+	CreationTime string `json:"creation_time"`
+	CreationPath string `json:"creation_path"`
 }
 
 // APIError is returned by Do for any HTTP status >= 400.
@@ -363,6 +376,9 @@ func (c *Client) Do(method, path string, reqBody any) (*Response, error) {
 	if c.token != "" {
 		req.Header.Set("X-Vault-Token", c.token)
 	}
+	if c.wrapTTL != "" {
+		req.Header.Set("X-Vault-Wrap-TTL", c.wrapTTL)
+	}
 	hr, err := c.hc.Do(req)
 	if err != nil {
 		return nil, err
@@ -376,6 +392,7 @@ func (c *Client) Do(method, path string, reqBody any) (*Response, error) {
 			RequestID string         `json:"request_id"`
 			Data      map[string]any `json:"data"`
 			Auth      *AuthInfo      `json:"auth"`
+			WrapInfo  *WrapInfo      `json:"wrap_info"`
 			Warnings  []string       `json:"warnings"`
 			Errors    []string       `json:"errors"`
 		}
@@ -383,6 +400,7 @@ func (c *Client) Do(method, path string, reqBody any) (*Response, error) {
 			resp.RequestID = env.RequestID
 			resp.Data = env.Data
 			resp.Auth = env.Auth
+			resp.WrapInfo = env.WrapInfo
 			resp.Warnings = env.Warnings
 			resp.Errors = env.Errors
 		}
