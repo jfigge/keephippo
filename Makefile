@@ -13,6 +13,14 @@ BUILD_DIR  := $(CURDIR)/build
 DIST_DIR   := $(CURDIR)/dist
 VERPKG     := $(MODULE)/internal/version
 
+# Make tools installed by `make install` (gofumpt, golangci-lint, govulncheck,
+# goreleaser) discoverable even when the Go bin dir is not on the user's PATH.
+GOBIN := $(shell $(GO) env GOBIN)
+ifeq ($(strip $(GOBIN)),)
+GOBIN := $(shell $(GO) env GOPATH)/bin
+endif
+export PATH := $(GOBIN):$(PATH)
+
 # ---- version metadata (injected via -ldflags) ----
 # VERSION defaults to the git description; override it for a release:
 #   make release VERSION=1.2.3
@@ -96,8 +104,8 @@ test: ## Run unit tests with the race detector + coverage
 e2e: ## Run the e2e integration suite — stub until later phases
 	$(GO) -C $(SRC) test -tags=e2e -race -count=1 ./e2e/...
 
-compat: ## Run the openbao/vault CLI against our server — stub until Phase 2
-	@echo "compat: not yet implemented (Phase 2)"
+compat: ## Golden envelope check + live openbao/vault cross-check (if installed)
+	@./scripts/compat-test.sh
 
 vuln: ## Run govulncheck (skipped with a warning if not installed)
 	@if command -v govulncheck >/dev/null 2>&1; then \

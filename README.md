@@ -26,8 +26,9 @@ their definitions of done.
 |------:|-------|-------|
 | 0 | Scaffolding · Makefile · CI · `keephippo` binary | ✅ done |
 | 1 | Storage · barrier · Shamir seal/unseal | ✅ done |
-| 2 | Mounts · HTTP core · KV v1 · token auth | ⬜ next |
-| 3–4 | Policies · full CLI | ⬜ |
+| 2 | Mounts · HTTP core · KV v1 · token auth | ✅ done |
+| 3 | Policies (ACL) · login · token lifecycle | ⬜ next |
+| 4 | Full CLI to Vault parity | ⬜ |
 | 5–7 | userpass/approle · KV v2 · leases/transit · audit/wrapping | ⬜ |
 | 8–9 | Raft HA · auto-unseal · identity · Web UI | ⬜ |
 

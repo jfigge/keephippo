@@ -8,10 +8,12 @@
 package http
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -45,11 +47,29 @@ func respondJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func respondError(w http.ResponseWriter, status int, msgs ...string) {
+	if msgs == nil {
+		msgs = []string{}
+	}
 	respondJSON(w, status, errorBody{Errors: msgs})
 }
 
 func respondEmpty(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// respondLogical writes a successful logical response using the standard
+// Vault-compatible envelope.
+func respondLogical(w http.ResponseWriter, status int, data map[string]any) {
+	respondJSON(w, status, &Response{RequestID: requestID(), Data: data})
+}
+
+// requestID returns a random UUID-v4-shaped identifier for the envelope.
+func requestID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 // decodeJSON reads a JSON request body into v. An empty body is treated as {}.

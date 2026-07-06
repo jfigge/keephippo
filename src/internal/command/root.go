@@ -6,6 +6,8 @@ package command
 import (
 	"fmt"
 	"os"
+	"regexp"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -14,11 +16,31 @@ import (
 
 // Execute runs the root command and returns a process exit code.
 func Execute() int {
-	if err := newRootCmd().Execute(); err != nil {
+	root := newRootCmd()
+	// Accept Vault-style single-dash long flags (-path, -dev, …) in addition to
+	// cobra's double-dash form.
+	root.SetArgs(normalizeArgs(os.Args[1:]))
+	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		return 1
 	}
 	return 0
+}
+
+var singleDashLongFlag = regexp.MustCompile(`^-[a-zA-Z][a-zA-Z0-9-]+`)
+
+// normalizeArgs rewrites single-dash long flags (e.g. -path=x, -dev) to their
+// double-dash form. Single-character flags (-h, -v) are left untouched.
+func normalizeArgs(args []string) []string {
+	out := make([]string, len(args))
+	for i, a := range args {
+		if strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && singleDashLongFlag.MatchString(a) {
+			out[i] = "-" + a
+		} else {
+			out[i] = a
+		}
+	}
+	return out
 }
 
 func newRootCmd() *cobra.Command {
@@ -37,6 +59,12 @@ func newRootCmd() *cobra.Command {
 		newServerCmd(),
 		newOperatorCmd(),
 		newStatusCmd(),
+		newSecretsCmd(),
+		newKVCmd(),
+		newReadCmd(),
+		newWriteCmd(),
+		newDeleteCmd(),
+		newListCmd(),
 	)
 	return root
 }

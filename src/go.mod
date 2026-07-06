@@ -2,7 +2,7 @@ module github.com/jfigge/keephippo
 
 go 1.26.0
 
-toolchain go1.26.3
+toolchain go1.26.4
 
 require (
 	github.com/hashicorp/hcl/v2 v2.24.0

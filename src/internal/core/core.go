@@ -7,7 +7,6 @@ package core
 
 import (
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"sync"
@@ -21,7 +20,6 @@ import (
 
 const (
 	sealConfigPath = "core/seal-config" // cleartext (N, T) — not secret
-	rootTokenPath  = "core/root-token"  // encrypted through the barrier
 	rootKeyLength  = 32
 )
 
@@ -32,23 +30,32 @@ var (
 	ErrNotInitialized = errors.New("core: not initialized")
 )
 
-// Core coordinates the physical backend, the barrier, and the seal.
+// Core coordinates the physical backend, the barrier, the seal, and — once
+// unsealed — the token store and the mount table / request router.
 type Core struct {
 	mu          sync.RWMutex
 	physical    physical.Backend
 	barrier     *barrier.Barrier
 	seal        *seal.ShamirSeal
 	storageType string
+
+	tokens *tokenStore
+	mounts *mountTable
+	router map[string]*mountedBackend
 }
 
 // New builds a sealed core over phys. storageType is reported in seal-status
 // (e.g. "file" or "inmem").
 func New(phys physical.Backend, storageType string) *Core {
+	b := barrier.New(phys)
 	return &Core{
 		physical:    phys,
-		barrier:     barrier.New(phys),
+		barrier:     b,
 		seal:        seal.NewShamir(),
 		storageType: storageType,
+		tokens:      newTokenStore(b),
+		mounts:      &mountTable{},
+		router:      make(map[string]*mountedBackend),
 	}
 }
 
@@ -115,24 +122,20 @@ func (c *Core) Initialize(p InitParams) (*InitResult, error) {
 		return nil, err
 	}
 
-	token, err := generateRootToken()
-	if err != nil {
-		return nil, err
-	}
-
-	// Transiently unseal the barrier to persist the root token, then re-seal so
-	// the server comes up sealed and must be unsealed with the shares.
+	// Transiently unseal the barrier to seed the root token, then re-seal so the
+	// server comes up sealed and must be unsealed with the shares.
 	if err := c.barrier.Unseal(rootKey); err != nil {
 		return nil, err
 	}
-	if err := c.barrier.Put(&physical.Entry{Key: rootTokenPath, Value: []byte(token)}); err != nil {
+	root, err := c.tokens.create([]string{"root"})
+	if err != nil {
 		return nil, err
 	}
 	if err := c.barrier.Seal(); err != nil {
 		return nil, err
 	}
 
-	return &InitResult{Keys: shares, RootToken: token}, nil
+	return &InitResult{Keys: shares, RootToken: root.ID}, nil
 }
 
 // Unseal submits one unseal key share. It returns the current sealed state: the
@@ -163,6 +166,9 @@ func (c *Core) Unseal(share []byte) (sealed bool, err error) {
 	defer zero(rootKey)
 
 	if err := c.barrier.Unseal(rootKey); err != nil {
+		return true, err
+	}
+	if err := c.setupMounts(); err != nil {
 		return true, err
 	}
 	return false, nil
@@ -259,14 +265,6 @@ func (c *Core) loadSealConfig() (*seal.Config, error) {
 		return nil, err
 	}
 	return &cfg, nil
-}
-
-func generateRootToken() (string, error) {
-	raw := make([]byte, 24)
-	if _, err := rand.Read(raw); err != nil {
-		return "", err
-	}
-	return "kh." + base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
 func zero(b []byte) {

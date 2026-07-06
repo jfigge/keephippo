@@ -73,8 +73,9 @@ func TestSysEndpointsLifecycle(t *testing.T) {
 	if rec, _ := do(t, h, "GET", "/v1/sys/health", nil); rec.Code != http.StatusOK {
 		t.Fatalf("health(unsealed) = %d; want 200", rec.Code)
 	}
-	if rec, _ := do(t, h, "GET", "/v1/secret/x", nil); rec.Code != http.StatusNotFound {
-		t.Fatalf("catch-all(unsealed) = %d; want 404", rec.Code)
+	// Unsealed + no token → 400 (missing client token); auth precedes routing.
+	if rec, _ := do(t, h, "GET", "/v1/secret/x", nil); rec.Code != http.StatusBadRequest {
+		t.Fatalf("logical(unsealed, no token) = %d; want 400", rec.Code)
 	}
 
 	// Seal → 204; seal-status reflects it.
