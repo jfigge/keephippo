@@ -50,5 +50,5 @@ release:
   github:
     owner: jfigge
     name: keephippo
-  draft: true
+  draft: false
   prerelease: auto
