@@ -14,11 +14,12 @@ A living matrix of Vault-compatible endpoints keephippo implements. Status:
 | `sys/seal` | ✅ | 1 | auth enforced from Phase 3 |
 | `sys/mounts` | ✅ | 2 | list/enable/disable secret engines |
 | `sys/remount` | ✅ | 2 | move a mount, data preserved |
-| `sys/auth` | ⬜ | 5 | list/enable/disable auth methods |
+| `sys/auth` | 🚧 | 4 | list/enable/disable wired; method backends in Phase 5 |
+| `sys/mounts/<p>/tune` | ✅ | 4 | tune mount config |
 | `sys/policies/acl` | ✅ | 3 | CRUD ACL policies (+ legacy `sys/policy`) |
 | `sys/capabilities-self` | ✅ | 3 | + `sys/capabilities` |
 | `sys/leases/*` | ⬜ | 6 | lookup/renew/revoke/revoke-prefix |
-| `sys/audit` | ⬜ | 7 | list/enable/disable audit devices |
+| `sys/audit` | 🚧 | 4/7 | list wired (empty); devices in Phase 7 |
 | `sys/wrapping/*` | ⬜ | 7 | wrap/unwrap/lookup/rewrap |
 
 ## Auth methods (`auth/`)

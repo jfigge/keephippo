@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -38,7 +39,7 @@ func newPolicyWriteCmd() *cobra.Command {
 			if err := c.PolicyWrite(args[0], string(src)); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Success! Uploaded policy: %s\n", args[0])
+			success(cmd, "Success! Uploaded policy: %s\n", args[0])
 			return nil
 		},
 	}
@@ -54,15 +55,17 @@ func newPolicyReadCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rules, err := c.PolicyRead(args[0])
+			resp, err := c.Do(http.MethodGet, "/v1/sys/policies/acl/"+args[0], nil)
 			if err != nil {
+				if resp != nil && resp.StatusCode == http.StatusNotFound {
+					return &exitError{code: 2, msg: fmt.Sprintf("No policy named: %s", args[0])}
+				}
 				return err
 			}
-			if rules == "" {
-				return fmt.Errorf("no policy named %q", args[0])
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), rules)
-			return nil
+			return emit(cmd, resp, func(w io.Writer) {
+				rules, _ := resp.Data["policy"].(string)
+				fmt.Fprintln(w, rules)
+			})
 		},
 	}
 }
@@ -77,14 +80,15 @@ func newPolicyListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			names, err := c.PolicyList()
+			resp, err := c.Do("LIST", "/v1/sys/policies/acl", nil)
 			if err != nil {
 				return err
 			}
-			for _, n := range names {
-				fmt.Fprintln(cmd.OutOrStdout(), n)
-			}
-			return nil
+			return emit(cmd, resp, func(w io.Writer) {
+				for _, n := range anyToStrings(resp.Data["keys"]) {
+					fmt.Fprintln(w, n)
+				}
+			})
 		},
 	}
 }
@@ -102,7 +106,7 @@ func newPolicyDeleteCmd() *cobra.Command {
 			if err := c.PolicyDelete(args[0]); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Success! Deleted policy: %s\n", args[0])
+			success(cmd, "Success! Deleted policy: %s\n", args[0])
 			return nil
 		},
 	}

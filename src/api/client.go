@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -157,6 +156,16 @@ func (c *Client) MountDisable(path string) error {
 // MountRemount moves the engine mounted at from to to.
 func (c *Client) MountRemount(from, to string) error {
 	return c.do(http.MethodPost, "/v1/sys/remount", map[string]string{"from": from, "to": to}, nil)
+}
+
+// AuthEnable enables an auth method of the given type at path.
+func (c *Client) AuthEnable(path, typ string) error {
+	return c.do(http.MethodPost, "/v1/sys/auth/"+path, map[string]string{"type": typ}, nil)
+}
+
+// AuthDisable disables the auth method at path.
+func (c *Client) AuthDisable(path string) error {
+	return c.do(http.MethodDelete, "/v1/sys/auth/"+path, nil, nil)
 }
 
 // --- policies ---
@@ -314,49 +323,94 @@ func (c *Client) ListMounts() (map[string]any, error) {
 	return out.Data, nil
 }
 
+// Response is a full API response: the raw envelope bytes (for --format=json
+// passthrough) plus the parsed fields commands need.
+type Response struct {
+	StatusCode int
+	Raw        json.RawMessage
+	RequestID  string
+	Data       map[string]any
+	Auth       *AuthInfo
+	Warnings   []string
+	Errors     []string
+}
+
+// APIError is returned by Do for any HTTP status >= 400.
+type APIError struct {
+	Status int
+	Errors []string
+}
+
+func (e *APIError) Error() string { return strings.Join(e.Errors, "; ") }
+
+// Do performs a request and returns the full response (always non-nil on a
+// successful round-trip, even for status >= 400, which also yields an
+// *APIError).
+func (c *Client) Do(method, path string, reqBody any) (*Response, error) {
+	var body io.Reader
+	if reqBody != nil {
+		b, err := json.Marshal(reqBody)
+		if err != nil {
+			return nil, err
+		}
+		body = bytes.NewReader(b)
+	}
+	req, err := http.NewRequest(method, c.addr+path, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.token != "" {
+		req.Header.Set("X-Vault-Token", c.token)
+	}
+	hr, err := c.hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = hr.Body.Close() }()
+
+	raw, _ := io.ReadAll(hr.Body)
+	resp := &Response{StatusCode: hr.StatusCode, Raw: raw}
+	if len(raw) > 0 {
+		var env struct {
+			RequestID string         `json:"request_id"`
+			Data      map[string]any `json:"data"`
+			Auth      *AuthInfo      `json:"auth"`
+			Warnings  []string       `json:"warnings"`
+			Errors    []string       `json:"errors"`
+		}
+		if json.Unmarshal(raw, &env) == nil {
+			resp.RequestID = env.RequestID
+			resp.Data = env.Data
+			resp.Auth = env.Auth
+			resp.Warnings = env.Warnings
+			resp.Errors = env.Errors
+		}
+	}
+	if hr.StatusCode >= 400 {
+		msgs := resp.Errors
+		if len(msgs) == 0 {
+			msgs = []string{fmt.Sprintf("request to %s failed: %s", path, hr.Status)}
+		}
+		return resp, &APIError{Status: hr.StatusCode, Errors: msgs}
+	}
+	return resp, nil
+}
+
 func (c *Client) do(method, path string, reqBody, out any) error {
 	_, err := c.doStatus(method, path, reqBody, out)
 	return err
 }
 
 func (c *Client) doStatus(method, path string, reqBody, out any) (int, error) {
-	var body io.Reader
-	if reqBody != nil {
-		b, err := json.Marshal(reqBody)
-		if err != nil {
-			return 0, err
-		}
-		body = bytes.NewReader(b)
-	}
-	req, err := http.NewRequest(method, c.addr+path, body)
-	if err != nil {
+	resp, err := c.Do(method, path, reqBody)
+	if resp == nil {
 		return 0, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	if c.token != "" {
-		req.Header.Set("X-Vault-Token", c.token)
-	}
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	data, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
-		var e struct {
-			Errors []string `json:"errors"`
-		}
-		_ = json.Unmarshal(data, &e)
-		if len(e.Errors) > 0 {
-			return resp.StatusCode, errors.New(strings.Join(e.Errors, "; "))
-		}
-		return resp.StatusCode, fmt.Errorf("request to %s failed: %s", path, resp.Status)
-	}
-	if out != nil && len(data) > 0 {
-		if err := json.Unmarshal(data, out); err != nil {
-			return resp.StatusCode, fmt.Errorf("decode response: %w", err)
+	if out != nil && len(resp.Raw) > 0 {
+		if uerr := json.Unmarshal(resp.Raw, out); uerr != nil && err == nil {
+			return resp.StatusCode, fmt.Errorf("decode response: %w", uerr)
 		}
 	}
-	return resp.StatusCode, nil
+	return resp.StatusCode, err
 }

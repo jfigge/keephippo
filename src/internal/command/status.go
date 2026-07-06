@@ -1,12 +1,10 @@
 package command
 
 import (
-	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/spf13/cobra"
-
-	"github.com/jfigge/keephippo/api"
 )
 
 func newStatusCmd() *cobra.Command {
@@ -19,33 +17,18 @@ func newStatusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			st, err := c.SealStatus()
+			resp, err := c.Do(http.MethodGet, "/v1/sys/seal-status", nil)
 			if err != nil {
 				return err
 			}
-			printSealStatus(cmd, st)
+			if err := printSealStatus(cmd, resp); err != nil {
+				return err
+			}
 			// Match Vault's convention: exit 2 when sealed.
-			if st.Sealed {
+			if respSealed(resp) {
 				os.Exit(2)
 			}
 			return nil
 		},
 	}
-}
-
-// printSealStatus renders a seal-status response as an aligned key/value table.
-func printSealStatus(cmd *cobra.Command, st *api.SealStatusResponse) {
-	w := cmd.OutOrStdout()
-	fmt.Fprintf(w, "%-16s%s\n", "Key", "Value")
-	fmt.Fprintf(w, "%-16s%s\n", "---", "-----")
-	fmt.Fprintf(w, "%-16s%s\n", "Seal Type", st.Type)
-	fmt.Fprintf(w, "%-16s%t\n", "Initialized", st.Initialized)
-	fmt.Fprintf(w, "%-16s%t\n", "Sealed", st.Sealed)
-	fmt.Fprintf(w, "%-16s%d\n", "Total Shares", st.N)
-	fmt.Fprintf(w, "%-16s%d\n", "Threshold", st.T)
-	if st.Sealed && st.Initialized {
-		fmt.Fprintf(w, "%-16s%d/%d\n", "Unseal Progress", st.Progress, st.T)
-	}
-	fmt.Fprintf(w, "%-16s%s\n", "Version", st.Version)
-	fmt.Fprintf(w, "%-16s%s\n", "Storage Type", st.StorageType)
 }

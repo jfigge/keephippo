@@ -14,12 +14,14 @@ import (
 
 const mountTablePath = "core/mounts"
 
-// MountEntry describes a mounted secrets engine.
+// MountEntry describes a mounted secrets engine (also reused for auth methods).
 type MountEntry struct {
-	Path     string `json:"path"`
-	Type     string `json:"type"`
-	UUID     string `json:"uuid"`
-	Accessor string `json:"accessor"`
+	Path        string         `json:"path"`
+	Type        string         `json:"type"`
+	UUID        string         `json:"uuid"`
+	Accessor    string         `json:"accessor"`
+	Description string         `json:"description,omitempty"`
+	Options     map[string]any `json:"options,omitempty"`
 }
 
 type mountTable struct {
@@ -77,7 +79,50 @@ func (c *Core) setupMounts() error {
 		}
 		c.router[e.Path] = mb
 	}
-	return nil
+	return c.setupAuth()
+}
+
+// TuneMount merges opts into a mount's tunable configuration.
+func (c *Core) TuneMount(path string, opts map[string]any) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.barrier.Sealed() {
+		return &CodedError{Status: 503, Message: "keephippo is sealed"}
+	}
+	path = normalizeMountPath(path)
+	mb, ok := c.router[path]
+	if !ok {
+		return &CodedError{Status: 400, Message: fmt.Sprintf("no mount at %q", path)}
+	}
+	if mb.entry.Options == nil {
+		mb.entry.Options = map[string]any{}
+	}
+	for k, v := range opts {
+		if k == "description" {
+			if s, ok := v.(string); ok {
+				mb.entry.Description = s
+			}
+			continue
+		}
+		mb.entry.Options[k] = v
+	}
+	return c.saveMountTable()
+}
+
+// MountConfig returns a mount's tunable configuration.
+func (c *Core) MountConfig(path string) (map[string]any, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	path = normalizeMountPath(path)
+	mb, ok := c.router[path]
+	if !ok {
+		return nil, &CodedError{Status: 404, Message: fmt.Sprintf("no mount at %q", path)}
+	}
+	out := map[string]any{"description": mb.entry.Description}
+	for k, v := range mb.entry.Options {
+		out[k] = v
+	}
+	return out, nil
 }
 
 func (c *Core) newMountedBackend(e *MountEntry) (*mountedBackend, error) {

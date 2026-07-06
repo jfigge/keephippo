@@ -2,7 +2,8 @@ package command
 
 import (
 	"fmt"
-	"sort"
+	"io"
+	"net/http"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -47,6 +48,21 @@ func newListCmd() *cobra.Command {
 	}
 }
 
+func runRead(cmd *cobra.Command, path string) error {
+	c, err := newClient(cmd)
+	if err != nil {
+		return err
+	}
+	resp, err := c.Do(http.MethodGet, "/v1/"+path, nil)
+	if err != nil {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
+			return noValue(path)
+		}
+		return err
+	}
+	return emit(cmd, resp, func(w io.Writer) { kvTable(w, resp.Data) })
+}
+
 func runWrite(cmd *cobra.Command, path string, kvArgs []string) error {
 	c, err := newClient(cmd)
 	if err != nil {
@@ -56,27 +72,11 @@ func runWrite(cmd *cobra.Command, path string, kvArgs []string) error {
 	if err != nil {
 		return err
 	}
-	if err := c.Write(path, data); err != nil {
-		return err
-	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Success! Data written to: %s\n", path)
-	return nil
-}
-
-func runRead(cmd *cobra.Command, path string) error {
-	c, err := newClient(cmd)
+	resp, err := c.Do(http.MethodPut, "/v1/"+path, data)
 	if err != nil {
 		return err
 	}
-	sec, err := c.Read(path)
-	if err != nil {
-		return err
-	}
-	if sec == nil {
-		return fmt.Errorf("no value found at %s", path)
-	}
-	printData(cmd, sec.Data)
-	return nil
+	return emit(cmd, resp, func(w io.Writer) { fmt.Fprintf(w, "Success! Data written to: %s\n", path) })
 }
 
 func runList(cmd *cobra.Command, path string) error {
@@ -84,15 +84,14 @@ func runList(cmd *cobra.Command, path string) error {
 	if err != nil {
 		return err
 	}
-	sec, err := c.List(path)
+	resp, err := c.Do("LIST", "/v1/"+path, nil)
 	if err != nil {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
+			return noValue(path)
+		}
 		return err
 	}
-	if sec == nil {
-		return fmt.Errorf("no value found at %s", path)
-	}
-	printKeys(cmd, sec.Data)
-	return nil
+	return emit(cmd, resp, func(w io.Writer) { keysTable(w, resp.Data) })
 }
 
 func runDelete(cmd *cobra.Command, path string) error {
@@ -100,11 +99,13 @@ func runDelete(cmd *cobra.Command, path string) error {
 	if err != nil {
 		return err
 	}
-	if err := c.Delete(path); err != nil {
+	resp, err := c.Do(http.MethodDelete, "/v1/"+path, nil)
+	if err != nil {
 		return err
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Success! Data deleted (if it existed) at: %s\n", path)
-	return nil
+	return emit(cmd, resp, func(w io.Writer) {
+		fmt.Fprintf(w, "Success! Data deleted (if it existed) at: %s\n", path)
+	})
 }
 
 func parseKV(args []string) (map[string]any, error) {
@@ -117,33 +118,4 @@ func parseKV(args []string) (map[string]any, error) {
 		data[a[:i]] = a[i+1:]
 	}
 	return data, nil
-}
-
-func printData(cmd *cobra.Command, data map[string]any) {
-	w := cmd.OutOrStdout()
-	fmt.Fprintf(w, "%-20s%s\n", "Key", "Value")
-	fmt.Fprintf(w, "%-20s%s\n", "---", "-----")
-	for _, k := range sortedKeys(data) {
-		fmt.Fprintf(w, "%-20s%v\n", k, data[k])
-	}
-}
-
-func printKeys(cmd *cobra.Command, data map[string]any) {
-	w := cmd.OutOrStdout()
-	fmt.Fprintln(w, "Keys")
-	fmt.Fprintln(w, "----")
-	if raw, ok := data["keys"].([]any); ok {
-		for _, k := range raw {
-			fmt.Fprintf(w, "%v\n", k)
-		}
-	}
-}
-
-func sortedKeys(m map[string]any) []string {
-	ks := make([]string, 0, len(m))
-	for k := range m {
-		ks = append(ks, k)
-	}
-	sort.Strings(ks)
-	return ks
 }

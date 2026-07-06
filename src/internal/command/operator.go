@@ -2,7 +2,10 @@ package command
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -11,9 +14,9 @@ import (
 func newOperatorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operator",
-		Short: "Perform operator-level commands (init, unseal)",
+		Short: "Perform operator-level commands (init, unseal, seal)",
 	}
-	cmd.AddCommand(newOperatorInitCmd(), newOperatorUnsealCmd())
+	cmd.AddCommand(newOperatorInitCmd(), newOperatorUnsealCmd(), newOperatorSealCmd())
 	return cmd
 }
 
@@ -28,21 +31,28 @@ func newOperatorInitCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := c.Init(shares, threshold)
+			resp, err := c.Do(http.MethodPost, "/v1/sys/init", map[string]int{
+				"secret_shares":    shares,
+				"secret_threshold": threshold,
+			})
 			if err != nil {
 				return err
 			}
-
-			w := cmd.OutOrStdout()
-			for i, k := range res.Keys {
-				fmt.Fprintf(w, "Unseal Key %d: %s\n", i+1, k)
-			}
-			fmt.Fprintln(w)
-			fmt.Fprintf(w, "Initial Root Token: %s\n", res.RootToken)
-			fmt.Fprintln(w)
-			fmt.Fprintf(w, "keephippo initialized with %d key share(s) and a threshold of %d.\n", len(res.Keys), threshold)
-			fmt.Fprintf(w, "Distribute the key shares securely. %d of them are required to unseal.\n", threshold)
-			return nil
+			return emit(cmd, resp, func(w io.Writer) {
+				var out struct {
+					Keys      []string `json:"keys"`
+					RootToken string   `json:"root_token"`
+				}
+				_ = json.Unmarshal(resp.Raw, &out)
+				for i, k := range out.Keys {
+					fmt.Fprintf(w, "Unseal Key %d: %s\n", i+1, k)
+				}
+				fmt.Fprintln(w)
+				fmt.Fprintf(w, "Initial Root Token: %s\n", out.RootToken)
+				fmt.Fprintln(w)
+				fmt.Fprintf(w, "keephippo initialized with %d key share(s) and a threshold of %d.\n", len(out.Keys), threshold)
+				fmt.Fprintf(w, "Distribute the key shares securely. %d of them are required to unseal.\n", threshold)
+			})
 		},
 	}
 	cmd.Flags().IntVar(&shares, "key-shares", 5, "Number of key shares to split the root key into")
@@ -60,7 +70,6 @@ func newOperatorUnsealCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-
 			var key string
 			if len(args) == 1 {
 				key = strings.TrimSpace(args[0])
@@ -72,12 +81,29 @@ func newOperatorUnsealCmd() *cobra.Command {
 			if key == "" {
 				return fmt.Errorf("an unseal key is required")
 			}
-
-			st, err := c.Unseal(key)
+			resp, err := c.Do(http.MethodPost, "/v1/sys/unseal", map[string]any{"key": key})
 			if err != nil {
 				return err
 			}
-			printSealStatus(cmd, st)
+			return printSealStatus(cmd, resp)
+		},
+	}
+}
+
+func newOperatorSealCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "seal",
+		Short: "Seal the server (requires a token with sudo)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			c, err := newClient(cmd)
+			if err != nil {
+				return err
+			}
+			if _, err := c.Do(http.MethodPost, "/v1/sys/seal", nil); err != nil {
+				return err
+			}
+			success(cmd, "Success! keephippo is sealed.\n")
 			return nil
 		},
 	}

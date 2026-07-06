@@ -2,6 +2,8 @@ package command
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 
 	"github.com/spf13/cobra"
 
@@ -34,25 +36,27 @@ func newTokenCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			auth, err := c.TokenCreate(api.TokenCreateRequest{
-				Policies:    policies,
-				TTL:         ttl,
-				NumUses:     numUses,
-				DisplayName: displayName,
-				NoDefault:   noDefault,
-			})
+			body := map[string]any{}
+			if len(policies) > 0 {
+				body["policies"] = policies
+			}
+			if ttl != "" {
+				body["ttl"] = ttl
+			}
+			if numUses > 0 {
+				body["num_uses"] = numUses
+			}
+			if displayName != "" {
+				body["display_name"] = displayName
+			}
+			if noDefault {
+				body["no_default_policy"] = true
+			}
+			resp, err := c.Do(http.MethodPost, "/v1/auth/token/create", body)
 			if err != nil {
 				return err
 			}
-			w := cmd.OutOrStdout()
-			fmt.Fprintf(w, "%-20s%s\n", "Key", "Value")
-			fmt.Fprintf(w, "%-20s%s\n", "---", "-----")
-			fmt.Fprintf(w, "%-20s%s\n", "token", auth.ClientToken)
-			fmt.Fprintf(w, "%-20s%s\n", "token_accessor", auth.Accessor)
-			fmt.Fprintf(w, "%-20s%d\n", "token_duration", auth.LeaseDuration)
-			fmt.Fprintf(w, "%-20s%v\n", "token_renewable", auth.Renewable)
-			fmt.Fprintf(w, "%-20s%v\n", "token_policies", auth.Policies)
-			return nil
+			return emit(cmd, resp, func(w io.Writer) { authTable(w, resp) })
 		},
 	}
 	cmd.Flags().StringSliceVar(&policies, "policy", nil, "Policy to attach (repeatable)")
@@ -73,17 +77,16 @@ func newTokenLookupCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			var data map[string]any
+			var resp *api.Response
 			if len(args) == 1 {
-				data, err = c.TokenLookup(args[0])
+				resp, err = c.Do(http.MethodPost, "/v1/auth/token/lookup", map[string]string{"token": args[0]})
 			} else {
-				data, err = c.TokenLookupSelf()
+				resp, err = c.Do(http.MethodGet, "/v1/auth/token/lookup-self", nil)
 			}
 			if err != nil {
 				return err
 			}
-			printData(cmd, data)
-			return nil
+			return emit(cmd, resp, func(w io.Writer) { kvTable(w, resp.Data) })
 		},
 	}
 }
@@ -99,12 +102,21 @@ func newTokenRenewCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			auth, err := c.TokenRenew(args[0], increment)
+			body := map[string]any{"token": args[0]}
+			if increment != "" {
+				body["increment"] = increment
+			}
+			resp, err := c.Do(http.MethodPost, "/v1/auth/token/renew", body)
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Success! Renewed token; duration=%d\n", auth.LeaseDuration)
-			return nil
+			return emit(cmd, resp, func(w io.Writer) {
+				dur := int64(0)
+				if resp.Auth != nil {
+					dur = resp.Auth.LeaseDuration
+				}
+				fmt.Fprintf(w, "Success! Renewed token; duration=%d\n", dur)
+			})
 		},
 	}
 	cmd.Flags().StringVar(&increment, "increment", "", "Requested renewal increment (e.g. 1h)")
@@ -124,7 +136,7 @@ func newTokenRevokeCmd() *cobra.Command {
 			if err := c.TokenRevoke(args[0]); err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "Success! Revoked token (if it existed).")
+			success(cmd, "Success! Revoked token (if it existed).\n")
 			return nil
 		},
 	}
@@ -140,12 +152,13 @@ func newTokenCapabilitiesCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			caps, err := c.CapabilitiesSelf(args[0])
+			resp, err := c.Do(http.MethodPost, "/v1/sys/capabilities-self", map[string]any{"paths": []string{args[0]}})
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%v\n", caps)
-			return nil
+			return emit(cmd, resp, func(w io.Writer) {
+				fmt.Fprintf(w, "%v\n", anyToStrings(resp.Data["capabilities"]))
+			})
 		},
 	}
 }

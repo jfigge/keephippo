@@ -3,6 +3,8 @@ package command
 import (
 	"bufio"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -32,21 +34,20 @@ func newLoginCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, err := c.TokenLookupSelf()
+			resp, err := c.Do(http.MethodGet, "/v1/auth/token/lookup-self", nil)
 			if err != nil {
 				return fmt.Errorf("token verification failed: %w", err)
 			}
 			if err := storeToken(tok); err != nil {
 				return err
 			}
-
-			w := cmd.OutOrStdout()
-			fmt.Fprintln(w, "Success! You are now authenticated. The token has been stored and")
-			fmt.Fprintln(w, "will be used for future commands.")
-			if pol, ok := data["policies"]; ok {
-				fmt.Fprintf(w, "token_policies: %v\n", pol)
-			}
-			return nil
+			return emit(cmd, resp, func(w io.Writer) {
+				fmt.Fprintln(w, "Success! You are now authenticated. The token has been stored and")
+				fmt.Fprintln(w, "will be used for future commands.")
+				if pol := resp.Data["policies"]; pol != nil {
+					fmt.Fprintf(w, "token_policies: %v\n", pol)
+				}
+			})
 		},
 	}
 	cmd.Flags().StringVar(&token, "token", "", "The token to authenticate with")

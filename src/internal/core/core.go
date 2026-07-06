@@ -39,10 +39,11 @@ type Core struct {
 	seal        *seal.ShamirSeal
 	storageType string
 
-	tokens   *tokenStore
-	policies *policyStore
-	mounts   *mountTable
-	router   map[string]*mountedBackend
+	tokens     *tokenStore
+	policies   *policyStore
+	mounts     *mountTable
+	authMounts *mountTable
+	router     map[string]*mountedBackend
 }
 
 // New builds a sealed core over phys. storageType is reported in seal-status
@@ -57,6 +58,7 @@ func New(phys physical.Backend, storageType string) *Core {
 		tokens:      newTokenStore(b),
 		policies:    newPolicyStore(b),
 		mounts:      &mountTable{},
+		authMounts:  &mountTable{},
 		router:      make(map[string]*mountedBackend),
 	}
 }

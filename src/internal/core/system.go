@@ -18,12 +18,26 @@ func (c *Core) handleSystem(req *logical.Request, te *TokenEntry) (*logical.Resp
 	switch {
 	case sub == "mounts":
 		return c.sysListMounts()
+	case strings.HasPrefix(sub, "mounts/") && strings.HasSuffix(sub, "/tune"):
+		return c.sysTune(req, strings.TrimSuffix(strings.TrimPrefix(sub, "mounts/"), "/tune"))
 	case strings.HasPrefix(sub, "mounts/"):
 		name := strings.TrimPrefix(sub, "mounts/")
 		if req.Operation == logical.DeleteOperation {
 			return nil, c.DisableMount(name)
 		}
 		return nil, c.EnableMount(name, stringField(req.Data, "type"))
+	case sub == "auth":
+		return c.sysListAuth(), nil
+	case strings.HasPrefix(sub, "auth/"):
+		name := strings.TrimPrefix(sub, "auth/")
+		if req.Operation == logical.DeleteOperation {
+			return nil, c.DisableAuth(name)
+		}
+		return nil, c.EnableAuth(name, stringField(req.Data, "type"))
+	case sub == "audit":
+		return &logical.Response{Data: map[string]any{}}, nil
+	case strings.HasPrefix(sub, "audit/"):
+		return nil, &CodedError{Status: 400, Message: "audit devices are not yet supported (Phase 7)"}
 	case sub == "remount":
 		return nil, c.Remount(stringField(req.Data, "from"), stringField(req.Data, "to"))
 	case sub == "seal":
@@ -53,6 +67,25 @@ func (c *Core) sysListMounts() (*logical.Response, error) {
 		data[m.Path] = map[string]any{"type": m.Type, "accessor": m.Accessor, "uuid": m.UUID}
 	}
 	return &logical.Response{Data: data}, nil
+}
+
+func (c *Core) sysListAuth() *logical.Response {
+	data := map[string]any{}
+	for _, m := range c.ListAuth() {
+		data[m.Path] = map[string]any{"type": m.Type, "accessor": m.Accessor}
+	}
+	return &logical.Response{Data: data}
+}
+
+func (c *Core) sysTune(req *logical.Request, name string) (*logical.Response, error) {
+	if req.Operation == logical.ReadOperation {
+		cfg, err := c.MountConfig(name)
+		if err != nil {
+			return nil, err
+		}
+		return &logical.Response{Data: cfg}, nil
+	}
+	return nil, c.TuneMount(name, req.Data)
 }
 
 func (c *Core) sysListPolicies() (*logical.Response, error) {

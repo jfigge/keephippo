@@ -15,6 +15,7 @@ import (
 func addClientFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("address", "", "Address of the keephippo server (env KEEPHIPPO_ADDR / VAULT_ADDR)")
 	cmd.PersistentFlags().Bool("tls-skip-verify", false, "Disable TLS certificate verification (insecure)")
+	cmd.PersistentFlags().String("format", "table", `Output format: "table" or "json"`)
 }
 
 // newClient builds an API client from the connection flags, environment, and

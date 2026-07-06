@@ -28,8 +28,9 @@ their definitions of done.
 | 1 | Storage · barrier · Shamir seal/unseal | ✅ done |
 | 2 | Mounts · HTTP core · KV v1 · token auth | ✅ done |
 | 3 | Policies (ACL) · login · token lifecycle | ✅ done |
-| 4 | Full CLI to Vault parity | ⬜ next |
-| 5–7 | userpass/approle · KV v2 · leases/transit · audit/wrapping | ⬜ |
+| 4 | Full CLI to Vault parity (`--format=json`, all verbs) | ✅ done — **v0.1.0** |
+| 5 | userpass/approle · KV v2 | ⬜ next |
+| 6–7 | leases/transit · audit/wrapping | ⬜ |
 | 8–9 | Raft HA · auto-unseal · identity · Web UI | ⬜ |
 
 ## Quick start
