@@ -13,3 +13,10 @@ updates:
       interval: weekly
     commit-message:
       prefix: ci
+    # Bundle all action bumps into one PR so multi-path actions that must share
+    # a version (e.g. github/codeql-action/init + analyze) never split across
+    # separate PRs and land on mismatched versions.
+    groups:
+      actions:
+        patterns:
+          - "*"
