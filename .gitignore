@@ -30,3 +30,7 @@ coverage.*
 
 # Node (website build)
 node_modules/
+# Signing material (keys/certs) — never commit
+/.keys/
+/certs/
+*.p12

@@ -28,6 +28,27 @@ builds:
     goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
 
+# Code-sign the macOS binaries with the shared Developer ID cert via GoReleaser's
+# built-in quill signer — runs on the Linux release runner, no macOS runner or
+# local keychain needed. Enabled only when the signing secrets are present, so
+# PR / snapshot / local builds stay unsigned and green. Notarization is a drop-in
+# addition once the App Store Connect Issuer ID is known: set the
+# MACOS_NOTARY_ISSUER_ID secret and uncomment the notarize block below (the key
+# and key_id secrets are already configured).
+notarize:
+  macos:
+    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+      ids: [keephippo]
+      sign:
+        certificate: "{{ .Env.MACOS_SIGN_P12 }}"
+        password: "{{ .Env.MACOS_SIGN_PASSWORD }}"
+      # notarize:
+      #   issuer_id: "{{ .Env.MACOS_NOTARY_ISSUER_ID }}"
+      #   key_id: "{{ .Env.MACOS_NOTARY_KEY_ID }}"
+      #   key: "{{ .Env.MACOS_NOTARY_KEY }}"
+      #   wait: true
+      #   timeout: 20m
+
 archives:
   - id: default
     formats: [tar.gz]
@@ -52,3 +73,37 @@ release:
     name: keephippo
   draft: false
   prerelease: auto
+
+# Publish a Homebrew cask to jfigge/homebrew-tap (installable via
+# `brew install jfigge/tap/keephippo`). Casks are macOS-only. The cask is
+# generated every build but only pushed when HOMEBREW_TAP_TOKEN is set (a PAT
+# with contents:write on the tap repo) — empty on PR/snapshot/local runs, so
+# those skip the upload and still succeed. `index .Env` yields "" for an unset
+# var without erroring.
+homebrew_casks:
+  - name: keephippo
+    binaries:
+      - keephippo
+    repository:
+      owner: jfigge
+      name: homebrew-tap
+      branch: main
+      token: '{{ index .Env "HOMEBREW_TAP_TOKEN" }}'
+    skip_upload: '{{ if eq (index .Env "HOMEBREW_TAP_TOKEN") "" }}true{{ else }}false{{ end }}'
+    directory: Casks
+    homepage: "https://keephippo.com/"
+    description: "Vault-compatible secrets manager — server + console (CLI)"
+    url:
+      template: "https://github.com/jfigge/keephippo/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+      verified: "github.com/jfigge/keephippo/"
+    commit_author:
+      name: goreleaser-bot
+      email: 41898282+github-actions[bot]@users.noreply.github.com
+    # Signed but not yet notarized: strip the quarantine bit so Gatekeeper won't
+    # block a browser-downloaded install. Remove once notarization is enabled.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/keephippo"]
+          end
