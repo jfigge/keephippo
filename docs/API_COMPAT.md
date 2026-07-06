@@ -51,6 +51,7 @@ A living matrix of Vault-compatible endpoints keephippo implements. Status:
 | `identity/group/*` | ✅ | 8 | groups; group policies apply to member entities' logins |
 | Auto-unseal (`seal "transit"`) | ✅ | 8 | boots unsealed from a remote transit engine; no manual key entry |
 | Integrated Storage (Raft HA) | ⬜ | 8 | not shipped (deferred) |
+| Web console at `/ui` | ✅ | 9 | embedded static UI + interactive REPL; gated by `ui = true` |
 
 ## Wire conventions
 

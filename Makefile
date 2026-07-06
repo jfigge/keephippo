@@ -43,10 +43,10 @@ LDFLAGS    := -s -w \
 
 .PHONY: all help version info install debug dev fmt fmt-check lint test e2e compat vuln \
 	build build-mac build-linux build-win dist dist-mac dist-linux dist-win \
-	sign-mac sign-win release dev-certs icons clean
+	sign-mac sign-win release dev-certs icons ui clean
 
 # ---- meta ----
-all: clean fmt lint test build ## Full pipeline: clean → fmt → lint → test → build
+all: clean fmt lint test ui build ## Full pipeline: clean → fmt → lint → test → ui → build
 
 help: ## List all targets
 	@grep -hE '^[a-zA-Z0-9_.-]+:.*## ' $(MAKEFILE_LIST) \
@@ -174,6 +174,13 @@ dev-certs: ## Generate self-signed TLS certs into src/testdata/
 
 icons: ## Regenerate the app icon set from icons/keephippo.png → src/web/icons/
 	@$(GO) run scripts/make-icons.go
+
+ui: ## Verify the web console assets (static HTML/CSS/JS, embedded at build time)
+	@for f in index.html app.css app.js web.go; do \
+		test -f $(SRC)/web/$$f || { echo "missing src/web/$$f"; exit 1; }; \
+	done
+	@test -f $(SRC)/web/icons/32x32.png || { echo "missing src/web/icons/*.png (run 'make icons')"; exit 1; }
+	@echo "web console assets present (served at /ui when ui = true)"
 
 clean: ## Remove build/ and dist/
 	@rm -rf $(BUILD_DIR) $(DIST_DIR)

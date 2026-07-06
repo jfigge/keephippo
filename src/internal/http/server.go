@@ -11,16 +11,30 @@ import (
 
 	"github.com/jfigge/keephippo/internal/core"
 	"github.com/jfigge/keephippo/internal/logical"
+	"github.com/jfigge/keephippo/web"
 )
 
 // Server adapts a core.Core to the HTTP API.
 type Server struct {
-	core *core.Core
+	core      *core.Core
+	uiEnabled bool
+}
+
+// Option configures a Server.
+type Option func(*Server)
+
+// WithUI enables serving the embedded web console at /ui.
+func WithUI(enabled bool) Option {
+	return func(s *Server) { s.uiEnabled = enabled }
 }
 
 // NewServer returns an HTTP server bound to c.
-func NewServer(c *core.Core) *Server {
-	return &Server{core: c}
+func NewServer(c *core.Core, opts ...Option) *Server {
+	s := &Server{core: c}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
 }
 
 // Handler builds the /v1/* request router. Only the pre-unseal control plane
@@ -35,8 +49,31 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/sys/init", s.handleInit)
 	mux.HandleFunc("PUT /v1/sys/unseal", s.handleUnseal)
 	mux.HandleFunc("POST /v1/sys/unseal", s.handleUnseal)
+	if s.uiEnabled {
+		fileServer := http.StripPrefix("/ui", http.FileServer(http.FS(web.Assets)))
+		mux.Handle("GET /ui/", fileServer)
+		mux.HandleFunc("GET /ui", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/ui/", http.StatusFound)
+		})
+		mux.HandleFunc("GET /favicon.ico", s.handleFavicon)
+		mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/ui/", http.StatusFound)
+		})
+	}
 	mux.HandleFunc("/", s.handleV1)
 	return mux
+}
+
+// handleFavicon serves the browser-tab icon from the embedded icon set.
+func (s *Server) handleFavicon(w http.ResponseWriter, r *http.Request) {
+	b, err := web.Assets.ReadFile("icons/32x32.png")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	_, _ = w.Write(b)
 }
 
 // ---- pre-unseal control plane (unauthenticated) ----

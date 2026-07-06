@@ -69,8 +69,9 @@ func runDevServer(cmd *cobra.Command) error {
 	fmt.Fprintf(w, "export KEEPHIPPO_ADDR=http://%s\n", defaultListenAddr)
 	fmt.Fprintf(w, "export KEEPHIPPO_TOKEN=%s\n", res.RootToken)
 	fmt.Fprintln(w)
+	fmt.Fprintf(w, "Web console:  http://%s/ui\n", defaultListenAddr)
 	fmt.Fprintf(w, "Listening on http://%s\n", defaultListenAddr)
-	return serve(cmd, defaultListenAddr, c)
+	return serve(cmd, defaultListenAddr, c, true)
 }
 
 // runServer starts a configured, sealed server that must be initialized and
@@ -119,7 +120,10 @@ func runServer(cmd *cobra.Command, configPath string) error {
 	} else {
 		fmt.Fprintln(w, "The server is sealed. Run 'keephippo operator init', then 'keephippo operator unseal'.")
 	}
-	return serve(cmd, addr, c)
+	if cfg.UI {
+		fmt.Fprintf(w, "Web console enabled at %s/ui\n", addr)
+	}
+	return serve(cmd, addr, c, cfg.UI)
 }
 
 func buildBackend(s *storageStanza) (physical.Backend, string, error) {
@@ -142,10 +146,10 @@ func buildBackend(s *storageStanza) (physical.Backend, string, error) {
 
 // serve runs the HTTP server until an interrupt/terminate signal, then shuts
 // down gracefully.
-func serve(cmd *cobra.Command, addr string, c *core.Core) error {
+func serve(cmd *cobra.Command, addr string, c *core.Core, ui bool) error {
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           kphttp.NewServer(c).Handler(),
+		Handler:           kphttp.NewServer(c, kphttp.WithUI(ui)).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

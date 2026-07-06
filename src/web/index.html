@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>keephippo</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/ui/icons/32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/ui/icons/16x16.png">
+  <link rel="icon" type="image/png" sizes="64x64" href="/ui/icons/64x64.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/ui/icons/256x256.png">
+  <link rel="stylesheet" href="/ui/app.css">
+</head>
+<body>
+  <!-- Login screen -->
+  <section id="login" class="login hidden">
+    <div class="login-card">
+      <img class="badge" src="/ui/icons/128x128.png" alt="keephippo" width="96" height="96">
+      <h1>keephippo</h1>
+      <p class="tagline">A Vault-compatible secrets manager</p>
+
+      <div id="seal-banner" class="banner hidden"></div>
+
+      <div id="unseal-box" class="unseal hidden">
+        <h2>Unseal</h2>
+        <input id="unseal-key" type="password" placeholder="Unseal key (hex or base64)" autocomplete="off">
+        <button id="unseal-btn">Submit key</button>
+        <div id="unseal-progress" class="muted"></div>
+      </div>
+
+      <div id="auth-box" class="auth">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-method="token">Token</button>
+          <button class="tab" data-method="userpass">Userpass</button>
+          <button class="tab" data-method="approle">AppRole</button>
+        </div>
+        <form id="login-form" autocomplete="off">
+          <div class="fields" data-method="token">
+            <input name="token" type="password" placeholder="Token" autocomplete="off">
+          </div>
+          <div class="fields hidden" data-method="userpass">
+            <input name="up_path" type="text" placeholder="Mount path (userpass)" value="userpass">
+            <input name="username" type="text" placeholder="Username">
+            <input name="password" type="password" placeholder="Password" autocomplete="off">
+          </div>
+          <div class="fields hidden" data-method="approle">
+            <input name="ar_path" type="text" placeholder="Mount path (approle)" value="approle">
+            <input name="role_id" type="text" placeholder="Role ID">
+            <input name="secret_id" type="password" placeholder="Secret ID" autocomplete="off">
+          </div>
+          <button type="submit">Sign in</button>
+        </form>
+      </div>
+      <div id="login-error" class="error hidden"></div>
+      <p class="version muted" id="login-version"></p>
+    </div>
+  </section>
+
+  <!-- Application shell -->
+  <section id="app" class="app hidden">
+    <header class="topbar">
+      <div class="brand">
+        <img src="/ui/icons/64x64.png" alt="" width="26" height="26">
+        <span>keephippo</span>
+      </div>
+      <div class="spacer"></div>
+      <span id="seal-pill" class="pill"></span>
+      <button id="logout-btn" class="ghost">Sign out</button>
+    </header>
+    <div class="body">
+      <nav class="side">
+        <button class="nav active" data-view="secrets">Secrets</button>
+        <button class="nav" data-view="policies">Policies</button>
+        <button class="nav" data-view="tokens">Tokens</button>
+        <button class="nav" data-view="leases">Leases</button>
+        <button class="nav" data-view="audit">Audit</button>
+        <button class="nav" data-view="console">Console</button>
+        <button class="nav" data-view="about">About</button>
+      </nav>
+      <main id="main" class="main"></main>
+    </div>
+  </section>
+
+  <script src="/ui/app.js"></script>
+</body>
+</html>

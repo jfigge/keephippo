@@ -33,7 +33,7 @@ their definitions of done.
 | 6 | Leases + expiration manager · transit (encryption engine) | ✅ done |
 | 7 | Audit devices (HMAC, fail-closed) · response wrapping · cubbyhole | ✅ done |
 | 8 | Identity (entity/group/alias) · auto-unseal (transit seal) · TOTP · cert auth | ✅ done |
-| 9 | Web UI · (Raft HA deferred) | ⬜ next |
+| 9 | Web console at `/ui` (embedded, interactive REPL) · (Raft HA deferred) | ✅ done |
 
 ## Quick start
 
@@ -44,6 +44,7 @@ make build
 
 # Dev server (in-memory, auto-unseal) — available from Phase 1
 make dev
+# then open the web console at http://127.0.0.1:8200/ui
 ```
 
 keephippo keeps Vault **wire compatibility**: the `/v1/` path model, the
