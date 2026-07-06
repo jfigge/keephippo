@@ -8,6 +8,7 @@
 package logical
 
 import (
+	"crypto/x509"
 	"net/url"
 	"time"
 )
@@ -38,6 +39,9 @@ type Request struct {
 	WrapTTL time.Duration
 	// RemoteAddr is the client's network address, recorded in audit logs.
 	RemoteAddr string
+	// PeerCertificates are the client's TLS certificates (if any), used by the
+	// cert auth method.
+	PeerCertificates []*x509.Certificate
 }
 
 // QueryValue returns the first value for a query parameter, or "".
@@ -83,6 +87,9 @@ type Auth struct {
 	DisplayName   string            `json:"display_name,omitempty"`
 	NumUses       int               `json:"num_uses,omitempty"`
 	Metadata      map[string]string `json:"metadata,omitempty"`
+	// Alias is the identity-alias name the auth method assigns to this login
+	// (e.g. the username or role name), used to resolve a stable entity.
+	Alias string `json:"-"`
 }
 
 // Backend is a secrets engine or auth method.

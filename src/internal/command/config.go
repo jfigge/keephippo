@@ -14,8 +14,27 @@ import (
 type serverConfig struct {
 	Storage  *storageStanza  `hcl:"storage,block"`
 	Listener *listenerStanza `hcl:"listener,block"`
+	Seal     *sealStanza     `hcl:"seal,block"`
 	UI       bool            `hcl:"ui,optional"`
 	Remain   hcl.Body        `hcl:",remain"`
+}
+
+// sealStanza configures an auto-unseal mechanism, e.g.
+//
+//	seal "transit" {
+//	  address   = "https://seal-source:8200"
+//	  token     = "..."
+//	  mount_path = "transit"
+//	  key_name   = "autounseal"
+//	}
+type sealStanza struct {
+	Type          string   `hcl:"type,label"`
+	Address       string   `hcl:"address,optional"`
+	Token         string   `hcl:"token,optional"`
+	MountPath     string   `hcl:"mount_path,optional"`
+	KeyName       string   `hcl:"key_name,optional"`
+	TLSSkipVerify bool     `hcl:"tls_skip_verify,optional"`
+	Remain        hcl.Body `hcl:",remain"`
 }
 
 type storageStanza struct {

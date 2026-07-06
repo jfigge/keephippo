@@ -20,8 +20,9 @@ import (
 )
 
 const (
-	sealConfigPath = "core/seal-config" // cleartext (N, T) — not secret
-	rootKeyLength  = 32
+	sealConfigPath    = "core/seal-config"     // cleartext (N, T) — not secret
+	autoUnsealKeyPath = "core/auto-unseal-key" // cleartext: root key wrapped by the auto-seal
+	rootKeyLength     = 32
 )
 
 var (
@@ -38,6 +39,7 @@ type Core struct {
 	physical    physical.Backend
 	barrier     *barrier.Barrier
 	seal        *seal.ShamirSeal
+	autoSeal    seal.AutoSeal // optional: transit/KMS auto-unseal
 	storageType string
 
 	tokens       *tokenStore
@@ -73,6 +75,15 @@ func New(phys physical.Backend, storageType string) *Core {
 	}
 	c.expiration.onRevoke = c.purgeCubbyhole
 	return c
+}
+
+// SetAutoSeal configures a transit/KMS auto-seal. When set, Initialize stores
+// the root key wrapped by the seal, and AutoUnseal can unseal without operator
+// key entry.
+func (c *Core) SetAutoSeal(s seal.AutoSeal) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.autoSeal = s
 }
 
 // InitParams configures Shamir sharing for Initialize.
@@ -150,7 +161,22 @@ func (c *Core) Initialize(p InitParams) (*InitResult, error) {
 	if err := c.policies.set("default", defaultPolicyHCL); err != nil {
 		return nil, err
 	}
-	if err := c.barrier.Seal(); err != nil {
+
+	if c.autoSeal != nil {
+		// Auto-seal: wrap the root key with the seal and store it (cleartext, but
+		// KMS-encrypted), then stay unsealed — no operator key entry needed.
+		wrapped, err := c.autoSeal.Encrypt(rootKey)
+		if err != nil {
+			return nil, err
+		}
+		if err := c.physical.Put(&physical.Entry{Key: autoUnsealKeyPath, Value: wrapped}); err != nil {
+			return nil, err
+		}
+		if err := c.setupMounts(); err != nil {
+			return nil, err
+		}
+		c.expiration.start()
+	} else if err := c.barrier.Seal(); err != nil {
 		return nil, err
 	}
 
@@ -184,14 +210,53 @@ func (c *Core) Unseal(share []byte) (sealed bool, err error) {
 	}
 	defer zero(rootKey)
 
-	if err := c.barrier.Unseal(rootKey); err != nil {
+	if err := c.finishUnseal(rootKey); err != nil {
 		return true, err
+	}
+	return false, nil
+}
+
+// finishUnseal opens the barrier with rootKey, instantiates mounts/backends, and
+// starts the background revoker. The caller holds c.mu.
+func (c *Core) finishUnseal(rootKey []byte) error {
+	if err := c.barrier.Unseal(rootKey); err != nil {
+		return err
 	}
 	if err := c.setupMounts(); err != nil {
-		return true, err
+		return err
 	}
 	c.expiration.start()
-	return false, nil
+	return nil
+}
+
+// AutoUnseal attempts to unseal using the configured auto-seal. It returns
+// (true, nil) once unsealed, (false, nil) when no auto-seal is configured or the
+// core is not yet initialized, or an error if the seal source is unreachable.
+func (c *Core) AutoUnseal() (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.autoSeal == nil {
+		return false, nil
+	}
+	if !c.barrier.Sealed() {
+		return true, nil
+	}
+	e, err := c.physical.Get(autoUnsealKeyPath)
+	if err != nil {
+		return false, err
+	}
+	if e == nil {
+		return false, nil // not initialized with an auto-seal yet
+	}
+	rootKey, err := c.autoSeal.Decrypt(e.Value)
+	if err != nil {
+		return false, err
+	}
+	defer zero(rootKey)
+	if err := c.finishUnseal(rootKey); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // Seal seals the barrier and discards any in-flight unseal progress.

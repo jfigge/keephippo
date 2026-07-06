@@ -20,6 +20,7 @@ import (
 	"github.com/jfigge/keephippo/internal/physical"
 	"github.com/jfigge/keephippo/internal/physical/file"
 	"github.com/jfigge/keephippo/internal/physical/inmem"
+	"github.com/jfigge/keephippo/internal/seal"
 )
 
 const defaultListenAddr = "127.0.0.1:8200"
@@ -95,7 +96,29 @@ func runServer(cmd *cobra.Command, configPath string) error {
 	c := core.New(backend, storageType)
 	w := cmd.OutOrStdout()
 	fmt.Fprintf(w, "==> keephippo server started (storage: %s, listener: %s)\n", storageType, addr)
-	fmt.Fprintln(w, "The server is sealed. Run 'keephippo operator init', then 'keephippo operator unseal'.")
+
+	if cfg.Seal != nil && cfg.Seal.Type == "transit" {
+		autoSeal, err := seal.NewTransitSeal(seal.TransitSealConfig{
+			Address:       cfg.Seal.Address,
+			Token:         cfg.Seal.Token,
+			MountPath:     cfg.Seal.MountPath,
+			KeyName:       cfg.Seal.KeyName,
+			TLSSkipVerify: cfg.Seal.TLSSkipVerify,
+		})
+		if err != nil {
+			return fmt.Errorf("configure transit auto-seal: %w", err)
+		}
+		c.SetAutoSeal(autoSeal)
+		if unsealed, err := c.AutoUnseal(); err != nil {
+			fmt.Fprintf(w, "auto-unseal failed (%v); the server remains sealed.\n", err)
+		} else if unsealed {
+			fmt.Fprintln(w, "The server auto-unsealed via the transit seal.")
+		} else {
+			fmt.Fprintln(w, "Auto-seal configured. Run 'keephippo operator init' to initialize.")
+		}
+	} else {
+		fmt.Fprintln(w, "The server is sealed. Run 'keephippo operator init', then 'keephippo operator unseal'.")
+	}
 	return serve(cmd, addr, c)
 }
 

@@ -156,6 +156,9 @@ func (s *Server) handleV1(w http.ResponseWriter, r *http.Request) {
 		RemoteAddr:  r.RemoteAddr,
 		WrapTTL:     parseWrapTTL(r.Header.Get("X-Vault-Wrap-TTL")),
 	}
+	if r.TLS != nil {
+		req.PeerCertificates = r.TLS.PeerCertificates
+	}
 	if op == logical.CreateOperation || op == logical.UpdateOperation {
 		data := map[string]any{}
 		if err := decodeJSON(r, &data); err != nil {

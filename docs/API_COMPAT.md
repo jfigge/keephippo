@@ -31,6 +31,7 @@ A living matrix of Vault-compatible endpoints keephippo implements. Status:
 | `token` | ✅ | 3 | create/lookup(-self)/renew/revoke, accessors, TTL, num_uses |
 | `userpass` | ✅ | 5 | users CRUD (bcrypt), login → policy-scoped token |
 | `approle` | ✅ | 5 | role/role-id/secret-id, constant-time login, secret_id TTL/num-uses |
+| `cert` | ✅ | 8 | TLS client-certificate login (matches a trusted cert or CA) |
 
 ## Secrets engines
 
@@ -40,6 +41,16 @@ A living matrix of Vault-compatible endpoints keephippo implements. Status:
 | `kv` v2 | ✅ | 5 | versioning, data/metadata, delete/undelete/destroy, CAS, max_versions |
 | `transit` | ✅ | 6 | encrypt/decrypt/rewrap, sign/verify, hmac, datakey; aes/chacha/ed25519/ecdsa; key rotation |
 | `cubbyhole` | ✅ | 7 | per-token store; auto-mounted; destroyed on token revoke |
+| `totp` | ✅ | 8 | RFC 6238 codes; key generate/import, code generate/validate |
+
+## Identity & seal
+
+| Feature | Status | Phase | Notes |
+|---------|:------:|:-----:|-------|
+| `identity/entity/*` | ✅ | 8 | entities + entity aliases mapping logins to a stable entity |
+| `identity/group/*` | ✅ | 8 | groups; group policies apply to member entities' logins |
+| Auto-unseal (`seal "transit"`) | ✅ | 8 | boots unsealed from a remote transit engine; no manual key entry |
+| Integrated Storage (Raft HA) | ⬜ | 8 | not shipped (deferred) |
 
 ## Wire conventions
 

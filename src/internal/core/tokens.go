@@ -35,6 +35,7 @@ type TokenEntry struct {
 	ExpireTime     int64    `json:"expire_time"`      // unix seconds; 0 = never
 	DisplayName    string   `json:"display_name"`
 	Renewable      bool     `json:"renewable"`
+	EntityID       string   `json:"entity_id,omitempty"`
 }
 
 // IsRoot reports whether the token carries the root policy.
@@ -48,6 +49,7 @@ type CreateTokenParams struct {
 	NumUses        int
 	DisplayName    string
 	Renewable      bool
+	EntityID       string
 }
 
 // tokenStore persists tokens through the barrier. Storage keys are the SHA-256
@@ -103,6 +105,7 @@ func (ts *tokenStore) create(p CreateTokenParams) (*TokenEntry, error) {
 		ExpireTime:     expire,
 		DisplayName:    p.DisplayName,
 		Renewable:      p.Renewable && ttlSec > 0,
+		EntityID:       p.EntityID,
 	}
 	if err := ts.persist(te); err != nil {
 		return nil, err

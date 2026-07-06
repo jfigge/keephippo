@@ -78,6 +78,8 @@ func (c *Core) handleInner(req *logical.Request) (*logical.Response, error) {
 		return c.handleTokenAuth(req, te)
 	case strings.HasPrefix(req.Path, "auth/"):
 		return c.dispatchAuth(req)
+	case req.Path == "identity" || strings.HasPrefix(req.Path, "identity/"):
+		return c.handleIdentity(req)
 	default:
 		return c.dispatchLogical(req)
 	}
@@ -106,12 +108,21 @@ func (c *Core) handleLogin(req *logical.Request, mb *mountedBackend, rel string)
 		policies = append([]string{"default"}, policies...)
 	}
 
+	// Resolve the login alias to a stable entity and merge the policies it (and
+	// its groups) contribute.
+	entityID, entityPolicies, err := c.resolveIdentity(mb.entry.Accessor, a.Alias)
+	if err != nil {
+		return nil, err
+	}
+	policies = append(policies, entityPolicies...)
+
 	te, err := c.tokens.create(CreateTokenParams{
 		Policies:    policies,
 		TTL:         time.Duration(a.LeaseDuration) * time.Second,
 		NumUses:     a.NumUses,
 		DisplayName: a.DisplayName,
 		Renewable:   a.Renewable,
+		EntityID:    entityID,
 	})
 	if err != nil {
 		return nil, err

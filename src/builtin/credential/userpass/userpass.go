@@ -166,6 +166,7 @@ func (b *Backend) login(req *logical.Request, name string) (*logical.Response, e
 		Renewable:     true,
 		DisplayName:   "userpass-" + name,
 		Metadata:      map[string]string{"username": name},
+		Alias:         name,
 	}}, nil
 }
 

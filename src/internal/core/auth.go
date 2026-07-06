@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	approle "github.com/jfigge/keephippo/builtin/credential/approle"
+	certauth "github.com/jfigge/keephippo/builtin/credential/cert"
 	userpass "github.com/jfigge/keephippo/builtin/credential/userpass"
 	"github.com/jfigge/keephippo/internal/logical"
 	"github.com/jfigge/keephippo/internal/physical"
@@ -47,6 +48,8 @@ func (c *Core) newAuthBackend(e *MountEntry) (*mountedBackend, error) {
 		backend = userpass.New(view)
 	case "approle":
 		backend = approle.New(view)
+	case "cert":
+		backend = certauth.New(view)
 	default:
 		return nil, fmt.Errorf("core: unknown auth method type %q", e.Type)
 	}
@@ -67,7 +70,7 @@ func (c *Core) EnableAuth(path, typ string) error {
 	if path == "token/" {
 		return &CodedError{Status: 400, Message: "the token auth method is built in and always enabled"}
 	}
-	if typ != "userpass" && typ != "approle" {
+	if typ != "userpass" && typ != "approle" && typ != "cert" {
 		return &CodedError{Status: 400, Message: fmt.Sprintf("unknown auth method type %q", typ)}
 	}
 	for _, e := range c.authMounts.Entries {

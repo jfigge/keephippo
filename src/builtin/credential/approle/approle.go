@@ -289,6 +289,7 @@ func (b *Backend) login(req *logical.Request) (*logical.Response, error) {
 		Renewable:     true,
 		DisplayName:   "approle-" + name,
 		Metadata:      map[string]string{"role_name": name},
+		Alias:         name,
 	}}, nil
 }
 

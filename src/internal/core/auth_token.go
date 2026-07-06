@@ -147,5 +147,6 @@ func (c *Core) tokenData(te *TokenEntry) map[string]any {
 		"explicit_max_ttl": te.ExplicitMaxTTL,
 		"display_name":     te.DisplayName,
 		"renewable":        te.Renewable,
+		"entity_id":        te.EntityID,
 	}
 }
