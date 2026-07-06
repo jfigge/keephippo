@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Web console — keephippo docs</title>
+  <meta name="description" content="keephippo user guide: Web console.">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/32x32.png">
+  <link rel="apple-touch-icon" href="/icons/256x256.png">
+  <meta property="og:title" content="Web console — keephippo docs">
+  <meta property="og:image" content="https://keephippo.com/og-image.png">
+  <link rel="stylesheet" href="/site.css">
+  <link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body>
+  <header class="site"><div class="wrap bar">
+    <a class="brand" href="/"><img src="/icons/64x64.png" alt=""> keephippo</a>
+    <nav>
+      <a href="/features.html">Features</a>
+      <a href="/docs/">Docs</a>
+      <a href="/downloads.html">Downloads</a>
+      <a href="/vs-vault.html" class="hide-sm">vs. Vault</a>
+      <a href="https://github.com/jfigge/keephippo">GitHub</a>
+      <a href="https://github.com/sponsors/jfigge" class="btn ghost">Sponsor</a>
+    </nav>
+  </div></header>
+  <div class="docs-wrap">
+    <aside class="docs-nav"><h4>User guide</h4><a href="/docs/">Overview</a><a href="/docs/quick-start.html">Quick start</a><a href="/docs/core-concepts.html">Core concepts</a><a href="/docs/global-flags.html">Global flags</a><a href="/docs/command-reference.html">Command reference</a><a href="/docs/web-console.html" class="active">Web console</a><a href="/docs/see-also.html">See also</a></aside>
+    <main class="docs-body"><h2>Web console</h2>
+<p>Enable the browser console with <code>ui = true</code> in your config (dev mode enables it
+automatically), then open <code>http://127.0.0.1:8200/ui</code>. It is just another client
+of the <code>/v1/*</code> API — it grants no extra privileges — and works entirely with the
+token you sign in with. This walkthrough follows the same login → unseal → enable
+mount → write/read → edit policy → run a console command path as the CLI.</p>
+<p><strong>1. Sign in.</strong> The login screen offers token, userpass, and approle. If the
+server is sealed it shows an unseal box first; submit key shares until it opens.</p>
+<p><img src="images/ui-login.png" alt="keephippo web console login screen"></p>
+<p><strong>2. Browse and enable engines.</strong> The <strong>Secrets</strong> screen lists your mounts and
+lets you enable a new one (pick a type and, for KV, a version), then read and
+write secrets from a simple form.</p>
+<p><img src="images/ui-secrets.png" alt="keephippo web console Secrets screen"></p>
+<p><strong>3. View and edit policies.</strong> The <strong>Policies</strong> screen loads any policy into an
+editor and saves your changes back — the browser equivalent of
+<code>keephippo policy read</code> / <code>policy write</code>.</p>
+<p><img src="images/ui-policies.png" alt="keephippo web console Policies screen"></p>
+<p><strong>4. Run commands interactively.</strong> The <strong>Console</strong> screen is an in-browser REPL:
+type <code>write secret/x a=b</code> then <code>read secret/x</code> and it renders the same JSON
+envelope the CLI returns, executing against <code>/v1/*</code> with your token.</p>
+<p><img src="images/ui-console.png" alt="keephippo web console interactive REPL"></p>
+<p><strong>5. About.</strong> The <strong>About</strong> panel shows the app badge, name, and version (read
+live from <code>sys/seal-status</code>). Token and lease management live under the <strong>Tokens</strong>
+and <strong>Leases</strong> screens, and enabled audit devices under <strong>Audit</strong>.</p>
+<p><img src="images/ui-about.png" alt="keephippo web console About panel"></p>
+</main>
+  </div>
+  <footer class="site"><div class="wrap">
+    <p class="fine">© 2026 keephippo · <a href="https://github.com/jfigge/keephippo">Source</a> · <a href="/privacy.html">Privacy</a> · MPL-2.0</p>
+  </div></footer>
+</body>
+</html>

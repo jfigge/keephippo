@@ -1,0 +1,15 @@
+{
+  "name": "keephippo-website",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Build scripts for the keephippo.com static site (GitHub Pages).",
+  "scripts": {
+    "build:versions": "node scripts/build-versions.mjs",
+    "build:docs": "node scripts/build-docs.mjs",
+    "build:site": "node scripts/build-versions.mjs && node scripts/build-docs.mjs"
+  },
+  "devDependencies": {
+    "marked": "^12.0.0"
+  }
+}

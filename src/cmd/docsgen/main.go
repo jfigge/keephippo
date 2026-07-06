@@ -46,7 +46,28 @@ func main() {
 	save(outDir, "ui-console", uiConsole())
 	save(outDir, "ui-about", uiAbout(iconDir))
 
+	// Marketing OG image for the website (1200×630).
+	webDir := filepath.Join(root, "website")
+	if err := os.MkdirAll(webDir, 0o755); err == nil {
+		save(webDir, "og-image", ogImage(iconDir))
+	}
+
 	fmt.Printf("wrote %d images to %s\n", len(cliCaptures)+5, outDir)
+}
+
+// ogImage renders the 1200×630 social-share card from the badge + branding.
+func ogImage(iconDir string) *image.RGBA {
+	const w, h = 1200, 630
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	draw.Draw(img, img.Bounds(), &image.Uniform{uiBg}, image.Point{}, draw.Src)
+	// subtle top accent bar
+	fillRect(img, 0, 0, w, 6, uiAccent)
+	drawIcon(img, iconDir, "256x256.png", 120, 190)
+	text(img, 430, 300, "keephippo", uiText)
+	text(img, 430, 340, "A from-scratch, Vault-compatible secrets manager.", uiMuted)
+	text(img, 430, 372, "Secrets engines - auth methods - policies - transit - web console.", uiMuted)
+	text(img, 430, 420, "keephippo.com", uiGreen)
+	return img
 }
 
 // ---- CLI captures (normalized real output) ----

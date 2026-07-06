@@ -19,6 +19,10 @@ clients keep working — while shipping its own console application and branding
 
 ## Status
 
+Website: **[keephippo.com](https://keephippo.com)** · Hosted user guide:
+**[keephippo.com/docs](https://keephippo.com/docs/)** (also in
+[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)).
+
 New here? The [**user guide**](docs/USER_GUIDE.md) teaches every CLI command and
 the web console, from install to daily use.
 

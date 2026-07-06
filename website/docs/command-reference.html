@@ -1,0 +1,1518 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Command reference — keephippo docs</title>
+  <meta name="description" content="keephippo user guide: Command reference.">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/32x32.png">
+  <link rel="apple-touch-icon" href="/icons/256x256.png">
+  <meta property="og:title" content="Command reference — keephippo docs">
+  <meta property="og:image" content="https://keephippo.com/og-image.png">
+  <link rel="stylesheet" href="/site.css">
+  <link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body>
+  <header class="site"><div class="wrap bar">
+    <a class="brand" href="/"><img src="/icons/64x64.png" alt=""> keephippo</a>
+    <nav>
+      <a href="/features.html">Features</a>
+      <a href="/docs/">Docs</a>
+      <a href="/downloads.html">Downloads</a>
+      <a href="/vs-vault.html" class="hide-sm">vs. Vault</a>
+      <a href="https://github.com/jfigge/keephippo">GitHub</a>
+      <a href="https://github.com/sponsors/jfigge" class="btn ghost">Sponsor</a>
+    </nav>
+  </div></header>
+  <div class="docs-wrap">
+    <aside class="docs-nav"><h4>User guide</h4><a href="/docs/">Overview</a><a href="/docs/quick-start.html">Quick start</a><a href="/docs/core-concepts.html">Core concepts</a><a href="/docs/global-flags.html">Global flags</a><a href="/docs/command-reference.html" class="active">Command reference</a><a href="/docs/web-console.html">Web console</a><a href="/docs/see-also.html">See also</a></aside>
+    <main class="docs-body"><h2>Command reference</h2>
+<p>Commands are grouped to mirror the CLI itself. Group commands (like <code>kv</code> or
+<code>auth</code>) are containers for the subcommands beneath them.</p>
+<h3>Server &amp; operator</h3>
+<h4><code>keephippo server</code></h4>
+<p>Runs the keephippo server: the long-lived process that stores your secrets. Use
+<code>--dev</code> for a throwaway in-memory server, or <code>--config</code> to point at an HCL/JSON
+config file for a real, file-backed, operator-unsealed server.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--dev</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>In-memory, auto-unsealed dev server (prints the root token; not for production).</td>
+</tr>
+<tr>
+<td><code>--config</code></td>
+<td>string</td>
+<td>—</td>
+<td>Path to an HCL/JSON config file (required unless <code>--dev</code>).</td>
+</tr>
+</tbody></table>
+<p>The config file declares a <code>storage</code> stanza (<code>file</code>/<code>inmem</code>), a <code>listener</code>, an
+optional <code>ui = true</code>, and an optional <code>seal &quot;transit&quot; { … }</code> auto-unseal stanza.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo server --config /etc/keephippo/config.hcl
+==&gt; keephippo server started (storage: file, listener: 127.0.0.1:8200)
+The server is sealed. Run &#39;keephippo operator init&#39;, then &#39;keephippo operator unseal&#39;.
+</code></pre>
+</details>
+
+<h4><code>keephippo operator</code></h4>
+<p>Groups the server lifecycle subcommands: <code>init</code>, <code>unseal</code>, and <code>seal</code>. You run
+these against a server you administer.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Inherits the global flags; the work is done by the subcommands below.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo operator init -key-shares=1 -key-threshold=1
+$ keephippo operator unseal &lt;unseal-key&gt;
+</code></pre>
+</details>
+
+<h4><code>keephippo operator init</code></h4>
+<p>Initializes a brand-new server exactly once: it generates the barrier/root keys,
+splits the root key into unseal <strong>key shares</strong>, and prints those shares plus the
+initial <strong>root token</strong>. Save them somewhere safe — they are shown only once.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-key-shares</code></td>
+<td>int</td>
+<td><code>5</code></td>
+<td>Number of unseal key shares to generate.</td>
+</tr>
+<tr>
+<td><code>-key-threshold</code></td>
+<td>int</td>
+<td><code>3</code></td>
+<td>Number of shares required to unseal.</td>
+</tr>
+</tbody></table>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo operator init -key-shares=1 -key-threshold=1
+Unseal Key 1: def0a1fb…
+Initial Root Token: kh.GhO9k0O9…
+</code></pre>
+</details>
+
+<h4><code>keephippo operator unseal</code></h4>
+<p>Submits one unseal key share. Repeat with distinct shares until the threshold is
+reached, at which point the server reconstructs the root key and becomes usable.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Takes the key share as its argument. With no argument it prompts for the key.
+Inherits the global flags.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo operator unseal def0a1fb…
+Key                Value
+---                -----
+Sealed             false
+</code></pre>
+</details>
+
+<h4><code>keephippo operator seal</code></h4>
+<p>Re-seals a running server: it discards the in-memory root key so no secret can be
+read until the server is unsealed again. Requires a root (sudo) token.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>No flags beyond the globals.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo operator seal
+Success! keephippo is sealed.
+</code></pre>
+</details>
+
+<h4><code>keephippo status</code></h4>
+<p>Shows whether the server is initialized and sealed, the seal type and share
+counts, the version, and the storage backend. It works even against a sealed
+server, so it is the first thing to run when something looks wrong.</p>
+<p><img src="images/cli-status.png" alt="keephippo status"></p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>No flags beyond the globals. <code>-format=json</code> prints the raw seal-status envelope.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo status
+Key             Value
+---             -----
+Sealed          false
+Version         v0.2.0
+Storage Type    inmem
+</code></pre>
+</details>
+
+<h4><code>keephippo version</code></h4>
+<p>Prints the version string (a git tag like <code>v0.2.0</code>, or a commit hash for
+development builds).</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>No flags.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo version
+v0.2.0
+</code></pre>
+</details>
+
+<h4><code>keephippo info</code></h4>
+<p>Prints a fuller build summary: version, branch, commit, build time, and the Go
+toolchain/OS/arch. Handy in bug reports.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>No flags.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo info
+version:    v0.2.0
+commit:     95c84d7
+</code></pre>
+</details>
+
+<h3>Session</h3>
+<h4><code>keephippo login</code></h4>
+<p>Authenticates and stores the resulting token locally (<code>~/.keephippo-token</code>) so
+later commands don&#39;t need <code>KEEPHIPPO_TOKEN</code>. Log in with a raw token, or with
+<code>-method=userpass</code> / <code>-method=approle</code> to exchange credentials for a token.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--token</code></td>
+<td>string</td>
+<td>—</td>
+<td>The token to store (token method).</td>
+</tr>
+<tr>
+<td><code>--method</code></td>
+<td>string</td>
+<td>—</td>
+<td>Auth method: <code>userpass</code> or <code>approle</code>.</td>
+</tr>
+<tr>
+<td><code>--path</code></td>
+<td>string</td>
+<td>method name</td>
+<td>Mount path of the auth method.</td>
+</tr>
+</tbody></table>
+<p>For <code>-method=userpass</code>, pass <code>username=…</code> and <code>password=…</code> as arguments; for
+<code>-method=approle</code>, pass <code>role_id=…</code> and <code>secret_id=…</code>.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo login -method=userpass username=alice password=s3cr3t
+Success! You are now authenticated. The token has been stored and
+will be used for future commands.
+</code></pre>
+</details>
+
+<h3>Generic paths</h3>
+<p>These four verbs operate on any <code>/v1/*</code> path directly — the lowest-level way to
+talk to any engine or system endpoint.</p>
+<h4><code>keephippo read</code></h4>
+<p>Reads data at a path and renders it. Equivalent to an HTTP <code>GET</code>. Add
+<code>-format=json</code> to see the full response envelope.</p>
+<p><img src="images/cli-read-json.png" alt="keephippo read -format=json"></p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Global flags only. <code>-format=json</code> prints the raw envelope; <code>-wrap-ttl</code> wraps the
+response into a single-use token.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo read secret/data/myapp/db -format=json
+{
+  &quot;data&quot;: { &quot;password&quot;: &quot;s3cr3t&quot;, &quot;username&quot;: &quot;admin&quot; },
+  &quot;lease_duration&quot;: 0,
+  &quot;renewable&quot;: false
+}
+</code></pre>
+</details>
+
+<h4><code>keephippo write</code></h4>
+<p>Writes <code>key=value</code> pairs (or a config change) to a path. Equivalent to an HTTP
+<code>PUT</code>/<code>POST</code>. Use <code>-</code> as a value source to read a value from stdin.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Takes <code>PATH [KEY=VALUE...]</code>. Global flags apply.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo write auth/approle/role/ci token_policies=deploy
+Success! Data written to: auth/approle/role/ci
+</code></pre>
+</details>
+
+<h4><code>keephippo list</code></h4>
+<p>Lists the child keys under a path (an HTTP <code>LIST</code>). Trailing-slash entries are
+sub-paths you can list further.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Global flags only. Returns exit code 2 with &quot;No value found&quot; when empty.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo list secret/metadata/myapp
+Keys
+----
+db
+</code></pre>
+</details>
+
+<h4><code>keephippo delete</code></h4>
+<p>Deletes the data at a path (an HTTP <code>DELETE</code>).</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Global flags only.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo delete secret/data/myapp/db
+Success! Data deleted (if it existed) at: secret/data/myapp/db
+</code></pre>
+</details>
+
+<h3>KV</h3>
+<p>The <code>kv</code> command is a convenience wrapper over the KV secrets engine. It detects
+whether a mount is <strong>v1</strong> (unversioned) or <strong>v2</strong> (versioned) and rewrites paths
+onto the <code>data/</code> and <code>metadata/</code> sub-paths automatically.</p>
+<h4><code>keephippo kv</code></h4>
+<p>Groups the KV subcommands: <code>put</code>, <code>get</code>, <code>list</code>, <code>delete</code>, plus the v2 verbs
+<code>undelete</code>, <code>destroy</code>, <code>patch</code>, <code>rollback</code>, and <code>metadata</code>.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Inherits the global flags; behaviour lives in the subcommands.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo kv put secret/hello greeting=world
+$ keephippo kv get secret/hello
+</code></pre>
+</details>
+
+<h4><code>keephippo kv put</code></h4>
+<p>Writes one or more <code>key=value</code> pairs to a KV path — the everyday &quot;save this
+secret here&quot; command. On a v2 mount it creates a new version.</p>
+<p><img src="images/cli-kv-put.png" alt="keephippo kv put"></p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-cas</code></td>
+<td>int</td>
+<td>—</td>
+<td>Check-and-set: only write if the current version matches (KV v2).</td>
+</tr>
+</tbody></table>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo kv put secret/myapp/db username=admin password=s3cr3t
+Success! Data written to: secret/myapp/db
+</code></pre>
+</details>
+
+<h4><code>keephippo kv get</code></h4>
+<p>Reads a secret and prints its fields. On a v2 mount, <code>-version</code> reads a specific
+historical version and the metadata (version, timestamps) is shown alongside.</p>
+<p><img src="images/cli-kv-get.png" alt="keephippo kv get"></p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-version</code></td>
+<td>int</td>
+<td>latest</td>
+<td>Read a specific version (KV v2).</td>
+</tr>
+</tbody></table>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo kv get secret/myapp/db
+Key                 Value
+---                 -----
+password            s3cr3t
+username            admin
+</code></pre>
+</details>
+
+<h4><code>keephippo kv list</code></h4>
+<p>Lists the keys under a KV path (uses the <code>metadata/</code> layout on v2 mounts).</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Global flags only.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo kv list secret/myapp
+Keys
+----
+db
+</code></pre>
+</details>
+
+<h4><code>keephippo kv delete</code></h4>
+<p>Deletes a secret. On a v2 mount this is a <strong>soft delete</strong> (the version can be
+undeleted); pass <code>-versions</code> to soft-delete specific versions.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-versions</code></td>
+<td>list</td>
+<td>latest</td>
+<td>Comma-separated versions to soft-delete (KV v2).</td>
+</tr>
+</tbody></table>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo kv delete -versions=2 secret/myapp/db
+Success! Data deleted (if it existed) at: secret/myapp/db
+</code></pre>
+</details>
+
+<h4><code>keephippo kv undelete</code></h4>
+<p>Restores soft-deleted versions of a v2 secret.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-versions</code></td>
+<td>list</td>
+<td>—</td>
+<td>Comma-separated versions to restore (required).</td>
+</tr>
+</tbody></table>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo kv undelete -versions=2 secret/myapp/db
+</code></pre>
+</details>
+
+<h4><code>keephippo kv destroy</code></h4>
+<p>Permanently destroys specific versions of a v2 secret — the data is gone and
+cannot be undeleted.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-versions</code></td>
+<td>list</td>
+<td>—</td>
+<td>Comma-separated versions to destroy (required).</td>
+</tr>
+</tbody></table>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo kv destroy -versions=1 secret/myapp/db
+</code></pre>
+</details>
+
+<h4><code>keephippo kv patch</code></h4>
+<p>Updates individual fields of the latest v2 version without replacing the whole
+secret (a read-modify-write that keeps the other keys).</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Takes <code>PATH KEY=VALUE...</code>. KV v2 only.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo kv patch secret/myapp/db password=rotated
+</code></pre>
+</details>
+
+<h4><code>keephippo kv rollback</code></h4>
+<p>Restores an older version as a new latest version (the contents of version N are
+written back as version N+1).</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-version</code></td>
+<td>int</td>
+<td>—</td>
+<td>The version to roll back to (required).</td>
+</tr>
+</tbody></table>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo kv rollback -version=1 secret/myapp/db
+</code></pre>
+</details>
+
+<h4><code>keephippo kv metadata</code></h4>
+<p>Groups the v2 metadata subcommands (<code>get</code>, <code>put</code>, <code>delete</code>) for a key&#39;s version
+history and tunables.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Inherits the global flags.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo kv metadata get secret/myapp/db
+</code></pre>
+</details>
+
+<h4><code>keephippo kv metadata get</code></h4>
+<p>Reads a key&#39;s metadata: current version, version history, <code>max_versions</code>, and
+<code>cas_required</code>.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Global flags only.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo kv metadata get secret/myapp/db
+Key                 Value
+---                 -----
+current_version     2
+max_versions        0
+</code></pre>
+</details>
+
+<h4><code>keephippo kv metadata put</code></h4>
+<p>Configures a key&#39;s metadata: the number of versions to keep and whether writes
+must use check-and-set.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-max-versions</code></td>
+<td>int</td>
+<td>—</td>
+<td>Number of versions to keep.</td>
+</tr>
+<tr>
+<td><code>-cas-required</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Require check-and-set on writes.</td>
+</tr>
+</tbody></table>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo kv metadata put -max-versions=5 secret/myapp/db
+</code></pre>
+</details>
+
+<h4><code>keephippo kv metadata delete</code></h4>
+<p>Deletes a key and <strong>all</strong> of its versions and metadata (a hard delete of the
+whole key).</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Global flags only.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo kv metadata delete secret/myapp/db
+</code></pre>
+</details>
+
+<h3>Engines &amp; tuning</h3>
+<h4><code>keephippo secrets</code></h4>
+<p>Groups the secrets-engine management subcommands: <code>enable</code>, <code>disable</code>, <code>list</code>,
+<code>move</code>, and <code>tune</code>.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Inherits the global flags.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo secrets list
+</code></pre>
+</details>
+
+<h4><code>keephippo secrets enable</code></h4>
+<p>Mounts a secrets engine at a path. Supported types: <code>kv</code>, <code>transit</code>, <code>totp</code>. Use
+<code>-version=2</code> to enable versioned KV.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-path</code></td>
+<td>string</td>
+<td>type name</td>
+<td>Path to mount the engine at.</td>
+</tr>
+<tr>
+<td><code>-version</code></td>
+<td>int</td>
+<td><code>1</code></td>
+<td>KV engine version (<code>2</code> for versioned KV).</td>
+</tr>
+</tbody></table>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo secrets enable -path=secret -version=2 kv
+Success! Enabled the kv secrets engine at: secret/
+</code></pre>
+</details>
+
+<h4><code>keephippo secrets disable</code></h4>
+<p>Unmounts a secrets engine and clears its data.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Global flags only.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo secrets disable secret
+Success! Disabled the secrets engine (if it existed) at: secret/
+</code></pre>
+</details>
+
+<h4><code>keephippo secrets list</code></h4>
+<p>Lists the enabled secrets engines and their types.</p>
+<p><img src="images/cli-secrets-list.png" alt="keephippo secrets list"></p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Global flags only.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo secrets list
+Path            Type
+----            ----
+secret/         kv
+transit/        transit
+</code></pre>
+</details>
+
+<h4><code>keephippo secrets move</code></h4>
+<p>Moves a secrets engine to a new mount path, preserving its data (which is keyed
+by the mount&#39;s UUID, not its path).</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Takes <code>SOURCE DEST</code>. Global flags apply.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo secrets move secret kv
+Success! Moved secrets engine secret/ to: kv/
+</code></pre>
+</details>
+
+<h4><code>keephippo secrets tune</code></h4>
+<p>Reads or updates a mount&#39;s tunable configuration (e.g. description, KV options).</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Takes <code>PATH [KEY=VALUE...]</code>; with no pairs it reads the current config.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo secrets tune secret
+</code></pre>
+</details>
+
+<h3>Auth</h3>
+<h4><code>keephippo auth</code></h4>
+<p>Groups the auth-method management subcommands: <code>enable</code>, <code>disable</code>, <code>list</code>. keephippo
+ships <code>token</code> (built-in), <code>userpass</code>, <code>approle</code>, and <code>cert</code>.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Inherits the global flags.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo auth list
+</code></pre>
+</details>
+
+<h4><code>keephippo auth enable</code></h4>
+<p>Mounts an auth method under <code>auth/</code>. After enabling, configure users/roles/certs
+with <code>keephippo write auth/&lt;path&gt;/…</code>.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-path</code></td>
+<td>string</td>
+<td>type name</td>
+<td>Path to mount the auth method at.</td>
+</tr>
+</tbody></table>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo auth enable userpass
+Success! Enabled userpass auth method at: userpass/
+$ keephippo write auth/userpass/users/alice password=s3cr3t token_policies=app
+</code></pre>
+</details>
+
+<h4><code>keephippo auth disable</code></h4>
+<p>Disables an auth method and clears its data.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Global flags only.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo auth disable userpass
+</code></pre>
+</details>
+
+<h4><code>keephippo auth list</code></h4>
+<p>Lists the enabled auth methods (always including the built-in <code>token/</code>).</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Global flags only.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo auth list
+Path            Type
+----            ----
+token/          token
+userpass/       userpass
+</code></pre>
+</details>
+
+<h3>Policies</h3>
+<h4><code>keephippo policy</code></h4>
+<p>Groups the ACL policy subcommands: <code>read</code>, <code>write</code>, <code>list</code>, <code>delete</code>. Policies
+are HCL that grant capabilities on path patterns.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Inherits the global flags.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo policy list
+</code></pre>
+</details>
+
+<h4><code>keephippo policy write</code></h4>
+<p>Creates or updates a named policy from an HCL file, an inline string, or stdin
+(<code>-</code>).</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Takes <code>NAME PATH-OR-&quot;-&quot;</code>. Reading from <code>-</code> consumes the policy HCL from stdin.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo policy write app - &lt;&lt;&#39;EOF&#39;
+path &quot;secret/data/myapp/*&quot; {
+  capabilities = [&quot;read&quot;, &quot;list&quot;]
+}
+EOF
+Success! Uploaded policy: app
+</code></pre>
+</details>
+
+<h4><code>keephippo policy read</code></h4>
+<p>Prints a policy&#39;s HCL source.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Global flags only.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo policy read app
+path &quot;secret/data/myapp/*&quot; {
+  capabilities = [&quot;read&quot;, &quot;list&quot;]
+}
+</code></pre>
+</details>
+
+<h4><code>keephippo policy list</code></h4>
+<p>Lists the policy names (always including <code>root</code> and <code>default</code>).</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Global flags only.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo policy list
+Keys
+----
+app
+default
+root
+</code></pre>
+</details>
+
+<h4><code>keephippo policy delete</code></h4>
+<p>Deletes a policy. The built-in <code>root</code> and <code>default</code> policies cannot be deleted.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Global flags only.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo policy delete app
+Success! Deleted policy: app
+</code></pre>
+</details>
+
+<h3>Tokens</h3>
+<h4><code>keephippo token</code></h4>
+<p>Groups the token subcommands: <code>create</code>, <code>lookup</code>, <code>renew</code>, <code>revoke</code>, and
+<code>capabilities</code>.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Inherits the global flags.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo token create -policy=app -ttl=1h
+</code></pre>
+</details>
+
+<h4><code>keephippo token create</code></h4>
+<p>Mints a new token with a set of policies and a TTL. The parent token must be
+allowed to grant what it hands out (only a root token can create root tokens).</p>
+<p><img src="images/cli-token-create.png" alt="keephippo token create"></p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-policy</code></td>
+<td>list</td>
+<td>—</td>
+<td>Policy to attach (repeatable).</td>
+</tr>
+<tr>
+<td><code>-ttl</code></td>
+<td>duration</td>
+<td>system default</td>
+<td>Token lifetime.</td>
+</tr>
+<tr>
+<td><code>-num-uses</code></td>
+<td>int</td>
+<td>unlimited</td>
+<td>Limit the token to this many uses.</td>
+</tr>
+<tr>
+<td><code>-display-name</code></td>
+<td>string</td>
+<td>—</td>
+<td>A human label recorded on the token.</td>
+</tr>
+<tr>
+<td><code>-no-default-policy</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Don&#39;t attach the <code>default</code> policy.</td>
+</tr>
+</tbody></table>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo token create -policy=app -ttl=1h
+Key                 Value
+---                 -----
+token               kh.W4Flu8ab…
+token_policies      [default app]
+</code></pre>
+</details>
+
+<h4><code>keephippo token lookup</code></h4>
+<p>Shows a token&#39;s metadata: its policies, remaining TTL, accessor, and (if any)
+its identity entity.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Takes an optional token argument; with none it looks up your own token.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo token lookup
+Key                 Value
+---                 -----
+policies            [root]
+ttl                 0
+</code></pre>
+</details>
+
+<h4><code>keephippo token renew</code></h4>
+<p>Extends a renewable token&#39;s TTL, up to its maximum.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Takes the token and an optional <code>-increment</code>. Global flags apply.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo token renew -increment=1h kh.W4Flu8ab…
+</code></pre>
+</details>
+
+<h4><code>keephippo token revoke</code></h4>
+<p>Revokes a token immediately, destroying it and its cubbyhole.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Takes the token to revoke. Global flags apply.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo token revoke kh.W4Flu8ab…
+Success! Revoked token
+</code></pre>
+</details>
+
+<h4><code>keephippo token capabilities</code></h4>
+<p>Reports which capabilities a token has on a given path — the quick way to answer
+&quot;can this token read that secret?&quot;.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Takes <code>[TOKEN] PATH</code>; with only a path it checks your own token.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo token capabilities secret/data/myapp/db
+read, list
+</code></pre>
+</details>
+
+<h3>Leases</h3>
+<h4><code>keephippo lease</code></h4>
+<p>Groups the lease subcommands: <code>lookup</code>, <code>renew</code>, <code>revoke</code>. Leases back tokens
+(and, in future, dynamic secrets); the server auto-revokes them on expiry.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Inherits the global flags.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo lease lookup auth/token/create/&lt;id&gt;
+</code></pre>
+</details>
+
+<h4><code>keephippo lease lookup</code></h4>
+<p>Shows a lease&#39;s metadata: issue time, expiry, and remaining TTL.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Takes the lease ID. Global flags apply.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo lease lookup auth/token/create/abc123
+Key                 Value
+---                 -----
+ttl                 3540
+renewable           true
+</code></pre>
+</details>
+
+<h4><code>keephippo lease renew</code></h4>
+<p>Extends a lease (and the token behind it), capped by its maximum TTL.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-increment</code></td>
+<td>duration</td>
+<td>—</td>
+<td>Requested extension (e.g. <code>1h</code>).</td>
+</tr>
+</tbody></table>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo lease renew -increment=1h auth/token/create/abc123
+</code></pre>
+</details>
+
+<h4><code>keephippo lease revoke</code></h4>
+<p>Revokes a lease now. With <code>-prefix</code>, revokes every lease under a prefix at once
+(a sudo operation).</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-prefix</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Treat the argument as a prefix and revoke all matches.</td>
+</tr>
+</tbody></table>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo lease revoke -prefix auth/token/create/
+Success! Revoked all leases under prefix: auth/token/create/
+</code></pre>
+</details>
+
+<h3>Transit</h3>
+<p>The <code>transit</code> command is a thin convenience wrapper over the transit engine
+(encryption-as-a-service); it base64-encodes plaintext for you. You can also
+drive transit with the generic <code>write</code>/<code>read</code> commands.</p>
+<h4><code>keephippo transit</code></h4>
+<p>Groups the transit subcommands: <code>key</code>, <code>encrypt</code>, <code>decrypt</code>, <code>rewrap</code>.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--mount</code></td>
+<td>string</td>
+<td><code>transit</code></td>
+<td>Transit mount path.</td>
+</tr>
+</tbody></table>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo transit key create app
+$ keephippo transit encrypt app &quot;launch codes&quot;
+</code></pre>
+</details>
+
+<h4><code>keephippo transit key</code></h4>
+<p>Groups the key-management subcommands: <code>create</code>, <code>read</code>, <code>rotate</code>.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Inherits <code>--mount</code>.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo transit key read app
+</code></pre>
+</details>
+
+<h4><code>keephippo transit key create</code></h4>
+<p>Creates a named encryption key. The default type is <code>aes256-gcm96</code>; other types
+are <code>chacha20-poly1305</code> (encryption) and <code>ed25519</code> / <code>ecdsa-p256</code> (signing).</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-type</code></td>
+<td>string</td>
+<td><code>aes256-gcm96</code></td>
+<td>Key type.</td>
+</tr>
+</tbody></table>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo transit key create app
+</code></pre>
+</details>
+
+<h4><code>keephippo transit key read</code></h4>
+<p>Reads a key&#39;s metadata: type, latest version, and (for signing keys) the public
+keys. The secret key material never leaves the server.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Inherits <code>--mount</code>.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo transit key read app
+Key                 Value
+---                 -----
+type                aes256-gcm96
+latest_version      1
+</code></pre>
+</details>
+
+<h4><code>keephippo transit key rotate</code></h4>
+<p>Adds a new version to a key. New encryptions use the new version; old ciphertext
+still decrypts until you raise <code>min_decryption_version</code>.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Inherits <code>--mount</code>.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo transit key rotate app
+</code></pre>
+</details>
+
+<h4><code>keephippo transit encrypt</code></h4>
+<p>Encrypts plaintext with a named key and prints the versioned ciphertext
+(<code>vault:v1:…</code>). The CLI base64-encodes the plaintext for you.</p>
+<p><img src="images/cli-transit.png" alt="keephippo transit"></p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Takes <code>NAME PLAINTEXT</code>. Inherits <code>--mount</code>.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo transit encrypt app &quot;launch codes&quot;
+vault:v1:P7YuX/G0dInbZTwQOjAYWAVGgq44…
+</code></pre>
+</details>
+
+<h4><code>keephippo transit decrypt</code></h4>
+<p>Decrypts a <code>vault:v…</code> ciphertext with a named key and prints the recovered
+plaintext.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Takes <code>NAME CIPHERTEXT</code>. Inherits <code>--mount</code>.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo transit decrypt app vault:v1:P7YuX/G0dInbZTwQ…
+launch codes
+</code></pre>
+</details>
+
+<h4><code>keephippo transit rewrap</code></h4>
+<p>Re-encrypts a ciphertext with the key&#39;s latest version — how you upgrade old
+ciphertext after a key rotation without ever seeing the plaintext.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Takes <code>NAME CIPHERTEXT</code>. Inherits <code>--mount</code>.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo transit rewrap app vault:v1:P7YuX/G0dInbZTwQ…
+vault:v2:9aRk2…
+</code></pre>
+</details>
+
+<h3>Audit &amp; wrapping</h3>
+<h4><code>keephippo audit</code></h4>
+<p>Groups the audit-device subcommands: <code>enable</code>, <code>disable</code>, <code>list</code>. Audit devices
+record every request with sensitive fields HMAC-obscured, and are fail-closed.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Inherits the global flags.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo audit list
+</code></pre>
+</details>
+
+<h4><code>keephippo audit enable</code></h4>
+<p>Enables an audit device. The <code>file</code> device appends JSON lines to a path; the
+<code>syslog</code> device writes to the local syslog. Pass device options as <code>key=value</code>.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-path</code></td>
+<td>string</td>
+<td>type name</td>
+<td>Path for the audit device.</td>
+</tr>
+</tbody></table>
+<p>Extra <code>key=value</code> arguments become device options (e.g. <code>file_path=…</code>).</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo audit enable file file_path=/var/log/keephippo/audit.log
+Success! Enabled the file audit device at: file/
+</code></pre>
+</details>
+
+<h4><code>keephippo audit disable</code></h4>
+<p>Disables an audit device.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Global flags only.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo audit disable file
+</code></pre>
+</details>
+
+<h4><code>keephippo audit list</code></h4>
+<p>Lists the enabled audit devices and their options.</p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Global flags only.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo audit list
+Path            Type
+----            ----
+file/           file
+</code></pre>
+</details>
+
+<h4><code>keephippo unwrap</code></h4>
+<p>Unwraps a response-wrapping token, returning the original data. Response wrapping
+(request a wrap with the global <code>-wrap-ttl</code> flag) hides a secret behind a
+single-use token; <code>unwrap</code> reveals it <strong>exactly once</strong>.</p>
+<p><img src="images/cli-unwrap.png" alt="keephippo unwrap"></p>
+<details>
+<summary><strong>Command options</strong></summary>
+
+<p>Takes an optional wrapping-token argument; with none, the stored/authenticated
+token is treated as the wrapping token.</p>
+</details>
+
+<details>
+<summary><strong>Typical use</strong></summary>
+
+<pre><code class="language-console">$ keephippo -wrap-ttl=120s read secret/myapp/db
+Key                    Value
+---                    -----
+wrapping_token         kh.idgsb4_fI2SNaY…
+wrapping_token_ttl     120
+$ keephippo unwrap kh.idgsb4_fI2SNaY…
+Key                 Value
+---                 -----
+password            s3cr3t
+username            admin
+</code></pre>
+</details>
+</main>
+  </div>
+  <footer class="site"><div class="wrap">
+    <p class="fine">© 2026 keephippo · <a href="https://github.com/jfigge/keephippo">Source</a> · <a href="/privacy.html">Privacy</a> · MPL-2.0</p>
+  </div></footer>
+</body>
+</html>

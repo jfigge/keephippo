@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Core concepts — keephippo docs</title>
+  <meta name="description" content="keephippo user guide: Core concepts.">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/32x32.png">
+  <link rel="apple-touch-icon" href="/icons/256x256.png">
+  <meta property="og:title" content="Core concepts — keephippo docs">
+  <meta property="og:image" content="https://keephippo.com/og-image.png">
+  <link rel="stylesheet" href="/site.css">
+  <link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body>
+  <header class="site"><div class="wrap bar">
+    <a class="brand" href="/"><img src="/icons/64x64.png" alt=""> keephippo</a>
+    <nav>
+      <a href="/features.html">Features</a>
+      <a href="/docs/">Docs</a>
+      <a href="/downloads.html">Downloads</a>
+      <a href="/vs-vault.html" class="hide-sm">vs. Vault</a>
+      <a href="https://github.com/jfigge/keephippo">GitHub</a>
+      <a href="https://github.com/sponsors/jfigge" class="btn ghost">Sponsor</a>
+    </nav>
+  </div></header>
+  <div class="docs-wrap">
+    <aside class="docs-nav"><h4>User guide</h4><a href="/docs/">Overview</a><a href="/docs/quick-start.html">Quick start</a><a href="/docs/core-concepts.html" class="active">Core concepts</a><a href="/docs/global-flags.html">Global flags</a><a href="/docs/command-reference.html">Command reference</a><a href="/docs/web-console.html">Web console</a><a href="/docs/see-also.html">See also</a></aside>
+    <main class="docs-body"><h2>Core concepts</h2>
+<ul>
+<li><strong>Server vs. CLI.</strong> The <code>keephippo</code> binary is both. <code>keephippo server</code> runs the
+long-lived process that holds your encrypted secrets; every other command is a
+thin client that talks to it over HTTP.</li>
+<li><strong>Seal / unseal.</strong> On disk, everything is encrypted by a <em>barrier</em> key that is
+itself protected by the <em>root key</em>. A fresh server starts <strong>sealed</strong> (the root
+key is not in memory). You <strong>initialize</strong> once to generate unseal key shares and
+a root token, then <strong>unseal</strong> by supplying the shares. Dev mode auto-unseals.</li>
+<li><strong>Tokens.</strong> Every request carries a token (the <code>X-Vault-Token</code> header). The
+<strong>root token</strong> can do anything; you create scoped tokens for day-to-day use.</li>
+<li><strong>Mounts &amp; paths.</strong> Secrets engines and auth methods are <em>mounted</em> at a path
+(e.g. <code>secret/</code>, <code>transit/</code>, <code>auth/userpass/</code>). A request path like
+<code>secret/myapp/db</code> routes to the engine at <code>secret/</code>.</li>
+<li><strong>Policies.</strong> ACL policies written in HCL grant capabilities
+(<code>read</code>, <code>create</code>, <code>update</code>, <code>delete</code>, <code>list</code>, <code>sudo</code>) on path patterns. Tokens
+carry policies; the default deny means &quot;no policy, no access&quot;.</li>
+<li><strong>Environment.</strong> The CLI reads <code>KEEPHIPPO_ADDR</code> then <code>VAULT_ADDR</code> for the
+server address, and <code>KEEPHIPPO_TOKEN</code> then <code>VAULT_TOKEN</code> then the token stored by
+<code>keephippo login</code> (<code>~/.keephippo-token</code>) for the token.</li>
+</ul>
+</main>
+  </div>
+  <footer class="site"><div class="wrap">
+    <p class="fine">© 2026 keephippo · <a href="https://github.com/jfigge/keephippo">Source</a> · <a href="/privacy.html">Privacy</a> · MPL-2.0</p>
+  </div></footer>
+</body>
+</html>

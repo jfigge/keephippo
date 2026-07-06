@@ -43,7 +43,7 @@ LDFLAGS    := -s -w \
 
 .PHONY: all help version info install debug dev fmt fmt-check lint test e2e compat vuln \
 	build build-mac build-linux build-win dist dist-mac dist-linux dist-win \
-	sign-mac sign-win release dev-certs icons ui docs docs-images clean
+	sign-mac sign-win release dev-certs icons ui docs docs-images site clean
 
 # ---- meta ----
 all: clean fmt lint test ui build ## Full pipeline: clean → fmt → lint → test → ui → build
@@ -187,6 +187,11 @@ docs-images: ## Regenerate the user-guide images (docs/images/*.png, 900x562)
 
 docs: ## Run the docs checks (command coverage, image dimensions, links)
 	@$(GO) -C $(SRC) test ./internal/command/ -run TestUserGuide -count=1
+
+site: ## Build the marketing/docs website into website/ (needs Node + marked)
+	npm install
+	npm run build:site
+	@$(GO) -C $(SRC) test ./internal/command/ -run TestWebsite -count=1
 
 clean: ## Remove build/ and dist/
 	@rm -rf $(BUILD_DIR) $(DIST_DIR)

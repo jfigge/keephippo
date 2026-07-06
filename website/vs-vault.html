@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>keephippo vs. Vault — an honest comparison</title>
+  <meta name="description" content="How keephippo compares to HashiCorp Vault: what's wire-compatible, what's in scope, and what it deliberately doesn't do. An honest, factual comparison.">
+  <link rel="canonical" href="https://keephippo.com/vs-vault.html">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/32x32.png">
+  <link rel="apple-touch-icon" href="/icons/256x256.png">
+  <meta property="og:title" content="keephippo vs. Vault — an honest comparison">
+  <meta property="og:description" content="What's wire-compatible, what's in scope, and what keephippo deliberately doesn't do.">
+  <meta property="og:image" content="https://keephippo.com/og-image.png">
+  <meta property="og:url" content="https://keephippo.com/vs-vault.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="/site.css">
+</head>
+<body>
+  <header class="site"><div class="wrap bar">
+    <a class="brand" href="/"><img src="/icons/64x64.png" alt=""> keephippo</a>
+    <nav>
+      <a href="/features.html">Features</a>
+      <a href="/docs/">Docs</a>
+      <a href="/downloads.html">Downloads</a>
+      <a href="/vs-vault.html" class="hide-sm">vs. Vault</a>
+      <a href="https://github.com/jfigge/keephippo">GitHub</a>
+      <a href="https://github.com/sponsors/jfigge" class="btn ghost">Sponsor</a>
+    </nav>
+  </div></header>
+
+  <main class="wrap" style="padding-top:44px;padding-bottom:40px">
+    <h1>keephippo vs. Vault</h1>
+    <p class="muted" style="max-width:760px">
+      keephippo is a clean-room, <strong>Vault-compatible</strong> secrets manager. It re-implements a
+      useful subset of HashiCorp Vault's HTTP API so existing Vault clients keep working, while
+      shipping its own console and branding. This page is a factual comparison — not a claim that
+      keephippo replaces Vault.
+    </p>
+
+    <div class="warn">
+      ⚠️ <strong>Not audited, not Enterprise.</strong> keephippo is an educational / portfolio project.
+      It has not undergone a security audit and does not implement Vault Enterprise features. Vault
+      remains the mature, audited, production-grade product.
+    </div>
+
+    <h2 style="margin-top:34px">At a glance</h2>
+    <table class="cmp">
+      <thead><tr><th>Capability</th><th>keephippo</th><th>Vault</th></tr></thead>
+      <tbody>
+        <tr><td>Wire API (<code>/v1/*</code>, <code>X-Vault-Token</code>, JSON envelope)</td><td class="yes">✓ compatible</td><td class="yes">✓ (the reference)</td></tr>
+        <tr><td>Existing Vault/OpenBao CLI works against it</td><td class="yes">✓ for the implemented surface</td><td class="yes">✓</td></tr>
+        <tr><td>KV v1 &amp; v2</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+        <tr><td>Auth: token, userpass, approle, cert</td><td class="yes">✓</td><td class="yes">✓ (+ many more)</td></tr>
+        <tr><td>Transit (encryption as a service)</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+        <tr><td>Policies, tokens, leases, identity</td><td class="yes">✓ core subset</td><td class="yes">✓ full</td></tr>
+        <tr><td>Audit devices, response wrapping, cubbyhole</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+        <tr><td>Auto-unseal (transit seal)</td><td class="yes">✓</td><td class="yes">✓ (+ cloud KMS/HSM)</td></tr>
+        <tr><td>Embedded web console</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+        <tr><td>Integrated Storage / HA (Raft)</td><td class="no">— deferred</td><td class="yes">✓</td></tr>
+        <tr><td>Broad engine/auth catalogue (PKI, SSH, DB, AWS, OIDC, k8s…)</td><td class="no">— curated subset</td><td class="yes">✓ extensive</td></tr>
+        <tr><td>Enterprise: replication, HSM, namespaces, Sentinel</td><td class="no">— non-goal</td><td class="yes">✓ (Enterprise)</td></tr>
+        <tr><td>Security audit &amp; production track record</td><td class="no">— not audited</td><td class="yes">✓ mature</td></tr>
+      </tbody>
+    </table>
+
+    <h2 style="margin-top:34px">Why it exists</h2>
+    <p class="muted" style="max-width:760px">
+      keephippo is a from-scratch build for learning and portfolio purposes: a way to understand how
+      a secrets manager works end-to-end — barrier encryption, Shamir seals, the request/ACL
+      pipeline, engines and auth methods — by re-implementing Vault's public interface rather than
+      reading its source. It is a clean-room implementation against the public API spec, using the
+      MPL-2.0 <a href="https://openbao.org">OpenBao</a> project as a reference where needed, never
+      Vault's BUSL-licensed source.
+    </p>
+
+    <h2 style="margin-top:34px">When to use which</h2>
+    <div class="grid">
+      <div class="card"><h3>Reach for Vault / OpenBao</h3><p>Production secrets, compliance, HA at scale, the full engine catalogue, and a security-audited, supported product.</p></div>
+      <div class="card"><h3>Reach for keephippo</h3><p>Learning how a secrets manager is built, local development against a Vault-shaped API, or a small self-hosted store for non-critical data.</p></div>
+    </div>
+
+    <p style="margin-top:28px" class="muted">
+      "Vault" and "HashiCorp" are trademarks of their respective owners. keephippo is independent and
+      not affiliated with or endorsed by HashiCorp or IBM. "Vault-compatible" is a factual
+      description of wire compatibility only.
+    </p>
+  </main>
+
+  <footer class="site"><div class="wrap">
+    <div class="cols">
+      <div class="col">
+        <a class="brand" href="/"><img src="/icons/64x64.png" width="24" height="24" alt=""> keephippo</a>
+        <p class="muted" style="max-width:320px">A from-scratch, Vault-compatible secrets manager. Independent and not affiliated with HashiCorp/IBM.</p>
+      </div>
+      <div class="col"><h5>Product</h5>
+        <a href="/features.html">Features</a>
+        <a href="/downloads.html">Downloads</a>
+        <a href="/vs-vault.html">vs. Vault</a>
+      </div>
+      <div class="col"><h5>Docs</h5>
+        <a href="/docs/">User guide</a>
+        <a href="https://github.com/jfigge/keephippo">Source</a>
+        <a href="/privacy.html">Privacy</a>
+      </div>
+      <div class="col"><h5>Community</h5>
+        <a href="https://github.com/jfigge/keephippo/issues">Issues</a>
+        <a href="https://github.com/sponsors/jfigge">Sponsor</a>
+      </div>
+    </div>
+    <p class="fine">© 2026 keephippo · Licensed under MPL-2.0 · "Vault" and "HashiCorp" are trademarks of their respective owners.</p>
+  </div></footer>
+</body>
+</html>

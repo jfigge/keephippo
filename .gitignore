@@ -27,3 +27,6 @@ coverage.*
 
 # Go
 /vendor/
+
+# Node (website build)
+node_modules/
