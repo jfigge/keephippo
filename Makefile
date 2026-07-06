@@ -43,7 +43,7 @@ LDFLAGS    := -s -w \
 
 .PHONY: all help version info install debug dev fmt fmt-check lint test e2e compat vuln \
 	build build-mac build-linux build-win dist dist-mac dist-linux dist-win \
-	sign-mac sign-win release dev-certs icons ui clean
+	sign-mac sign-win release dev-certs icons ui docs docs-images clean
 
 # ---- meta ----
 all: clean fmt lint test ui build ## Full pipeline: clean → fmt → lint → test → ui → build
@@ -181,6 +181,12 @@ ui: ## Verify the web console assets (static HTML/CSS/JS, embedded at build time
 	done
 	@test -f $(SRC)/web/icons/32x32.png || { echo "missing src/web/icons/*.png (run 'make icons')"; exit 1; }
 	@echo "web console assets present (served at /ui when ui = true)"
+
+docs-images: ## Regenerate the user-guide images (docs/images/*.png, 900x562)
+	@$(GO) -C $(SRC) run ./cmd/docsgen
+
+docs: ## Run the docs checks (command coverage, image dimensions, links)
+	@$(GO) -C $(SRC) test ./internal/command/ -run TestUserGuide -count=1
 
 clean: ## Remove build/ and dist/
 	@rm -rf $(BUILD_DIR) $(DIST_DIR)

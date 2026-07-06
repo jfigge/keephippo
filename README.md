@@ -19,6 +19,9 @@ clients keep working — while shipping its own console application and branding
 
 ## Status
 
+New here? The [**user guide**](docs/USER_GUIDE.md) teaches every CLI command and
+the web console, from install to daily use.
+
 Built in phases. See [`features/`](features/) for the per-phase build prompts and
 their definitions of done.
 
