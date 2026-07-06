@@ -9,12 +9,15 @@ import (
 const policyPrefix = "core/policy/acl/"
 
 // defaultPolicyHCL is the built-in "default" policy attached to non-root tokens:
-// it permits a token to manage itself.
+// it permits a token to manage itself and to run the mount-version preflight the
+// KV CLI relies on (matching Vault's default policy).
 const defaultPolicyHCL = `
 path "auth/token/lookup-self" { capabilities = ["read"] }
 path "auth/token/renew-self"  { capabilities = ["update"] }
 path "auth/token/revoke-self" { capabilities = ["update"] }
 path "sys/capabilities-self"  { capabilities = ["update"] }
+path "sys/internal/ui/mounts"    { capabilities = ["read"] }
+path "sys/internal/ui/mounts/*"  { capabilities = ["read"] }
 `
 
 // policyStore persists ACL policy source (HCL text) through the barrier.

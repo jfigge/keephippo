@@ -130,16 +130,35 @@ func (c *Core) newMountedBackend(e *MountEntry) (*mountedBackend, error) {
 	var backend logical.Backend
 	switch e.Type {
 	case "kv":
-		backend = kvengine.New(view)
+		if isKVv2(e.Options) {
+			backend = kvengine.NewV2(view, e.Options)
+		} else {
+			backend = kvengine.New(view)
+		}
 	default:
 		return nil, fmt.Errorf("core: unknown backend type %q", e.Type)
 	}
 	return &mountedBackend{entry: e, backend: backend, view: view}, nil
 }
 
+// isKVv2 reports whether mount options select KV version 2. The version arrives
+// as a string ("2") from the CLI/API but may be a JSON number after a round-trip.
+func isKVv2(opts map[string]any) bool {
+	switch v := opts["version"].(type) {
+	case string:
+		return v == "2"
+	case float64:
+		return v == 2
+	case int:
+		return v == 2
+	}
+	return false
+}
+
 // EnableMount mounts a new secrets engine of the given type at path and
-// persists the mount table through the barrier.
-func (c *Core) EnableMount(path, typ string) error {
+// persists the mount table through the barrier. options carries engine-specific
+// configuration captured at enable time (e.g. KV's version / max_versions).
+func (c *Core) EnableMount(path, typ string, options map[string]any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.barrier.Sealed() {
@@ -164,7 +183,7 @@ func (c *Core) EnableMount(path, typ string) error {
 	if err != nil {
 		return err
 	}
-	e := &MountEntry{Path: path, Type: typ, UUID: uuid, Accessor: typ + "_" + suffix[:8]}
+	e := &MountEntry{Path: path, Type: typ, UUID: uuid, Accessor: typ + "_" + suffix[:8], Options: options}
 
 	prev := c.mounts.Entries
 	c.mounts.Entries = append(c.mounts.Entries, e)

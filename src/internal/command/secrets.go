@@ -3,6 +3,7 @@ package command
 import (
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -19,8 +20,9 @@ func newSecretsCmd() *cobra.Command {
 
 func newSecretsEnableCmd() *cobra.Command {
 	var path string
+	var version int
 	cmd := &cobra.Command{
-		Use:   "enable [-path=PATH] TYPE",
+		Use:   "enable [-path=PATH] [-version=N] TYPE",
 		Short: "Enable a secrets engine",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -33,7 +35,12 @@ func newSecretsEnableCmd() *cobra.Command {
 			if p == "" {
 				p = typ
 			}
-			if err := c.MountEnable(p, typ); err != nil {
+			body := map[string]any{"type": typ}
+			if version > 0 {
+				// Options values are strings on the wire (matching Vault).
+				body["options"] = map[string]any{"version": strconv.Itoa(version)}
+			}
+			if _, err := c.Do(http.MethodPost, "/v1/sys/mounts/"+p, body); err != nil {
 				return err
 			}
 			success(cmd, "Success! Enabled the %s secrets engine at: %s/\n", typ, p)
@@ -41,6 +48,7 @@ func newSecretsEnableCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&path, "path", "", "Path to mount the engine at (default: the type name)")
+	cmd.Flags().IntVar(&version, "version", 0, "KV engine version (e.g. 2 for versioned KV)")
 	return cmd
 }
 

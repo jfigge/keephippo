@@ -20,12 +20,16 @@ func (c *Core) handleSystem(req *logical.Request, te *TokenEntry) (*logical.Resp
 		return c.sysListMounts()
 	case strings.HasPrefix(sub, "mounts/") && strings.HasSuffix(sub, "/tune"):
 		return c.sysTune(req, strings.TrimSuffix(strings.TrimPrefix(sub, "mounts/"), "/tune"))
+	case strings.HasPrefix(sub, "internal/ui/mounts/"):
+		return c.sysInternalUIMount(strings.TrimPrefix(sub, "internal/ui/mounts/"))
+	case sub == "internal/ui/mounts":
+		return c.sysListMounts()
 	case strings.HasPrefix(sub, "mounts/"):
 		name := strings.TrimPrefix(sub, "mounts/")
 		if req.Operation == logical.DeleteOperation {
 			return nil, c.DisableMount(name)
 		}
-		return nil, c.EnableMount(name, stringField(req.Data, "type"))
+		return nil, c.EnableMount(name, stringField(req.Data, "type"), mapField(req.Data, "options"))
 	case sub == "auth":
 		return c.sysListAuth(), nil
 	case strings.HasPrefix(sub, "auth/"):
@@ -64,9 +68,47 @@ func (c *Core) handleSystem(req *logical.Request, te *TokenEntry) (*logical.Resp
 func (c *Core) sysListMounts() (*logical.Response, error) {
 	data := map[string]any{}
 	for _, m := range c.ListMounts() {
-		data[m.Path] = map[string]any{"type": m.Type, "accessor": m.Accessor, "uuid": m.UUID}
+		data[m.Path] = mountInfo(m)
 	}
 	return &logical.Response{Data: data}, nil
+}
+
+// sysInternalUIMount resolves the mount serving path (longest-prefix match) and
+// returns its entry — including options.version — so a Vault/OpenBao `kv` CLI
+// can auto-detect whether the mount is KV v1 or v2.
+func (c *Core) sysInternalUIMount(path string) (*logical.Response, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var best *MountEntry
+	for _, m := range c.mounts.Entries {
+		root := strings.TrimSuffix(m.Path, "/")
+		if path == root || strings.HasPrefix(path, m.Path) {
+			if best == nil || len(m.Path) > len(best.Path) {
+				best = m
+			}
+		}
+	}
+	if best == nil {
+		return nil, &CodedError{Status: 404, Message: fmt.Sprintf("preflight capability check returned 403, no mount for path %q", path)}
+	}
+	return &logical.Response{Data: mountInfo(best)}, nil
+}
+
+// mountInfo renders a mount entry as Vault's per-mount description map.
+func mountInfo(m *MountEntry) map[string]any {
+	opts := m.Options
+	if opts == nil {
+		opts = map[string]any{}
+	}
+	return map[string]any{
+		"path":        m.Path,
+		"type":        m.Type,
+		"description": m.Description,
+		"accessor":    m.Accessor,
+		"uuid":        m.UUID,
+		"options":     opts,
+		"local":       false,
+	}
 }
 
 func (c *Core) sysListAuth() *logical.Response {
@@ -178,6 +220,11 @@ func capabilitiesResponse(acl *policy.ACL, data map[string]any) *logical.Respons
 func stringField(data map[string]any, key string) string {
 	v, _ := data[key].(string)
 	return v
+}
+
+func mapField(data map[string]any, key string) map[string]any {
+	m, _ := data[key].(map[string]any)
+	return m
 }
 
 func boolField(data map[string]any, key string, def bool) bool {

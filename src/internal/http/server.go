@@ -150,6 +150,7 @@ func (s *Server) handleV1(w http.ResponseWriter, r *http.Request) {
 		Operation:   op,
 		Path:        strings.TrimPrefix(r.URL.Path, "/v1/"),
 		ClientToken: r.Header.Get("X-Vault-Token"),
+		Query:       r.URL.Query(),
 	}
 	if op == logical.CreateOperation || op == logical.UpdateOperation {
 		data := map[string]any{}
@@ -225,6 +226,11 @@ func writeCoreError(w http.ResponseWriter, err error) {
 	var ce *core.CodedError
 	if errors.As(err, &ce) {
 		respondError(w, ce.Status, ce.Message)
+		return
+	}
+	var le *logical.CodedError
+	if errors.As(err, &le) {
+		respondError(w, le.Status, le.Message)
 		return
 	}
 	respondError(w, http.StatusInternalServerError, err.Error())

@@ -14,8 +14,9 @@ A living matrix of Vault-compatible endpoints keephippo implements. Status:
 | `sys/seal` | ✅ | 1 | auth enforced from Phase 3 |
 | `sys/mounts` | ✅ | 2 | list/enable/disable secret engines |
 | `sys/remount` | ✅ | 2 | move a mount, data preserved |
-| `sys/auth` | 🚧 | 4 | list/enable/disable wired; method backends in Phase 5 |
+| `sys/auth` | ✅ | 4/5 | list/enable/disable; userpass + approle backends in Phase 5 |
 | `sys/mounts/<p>/tune` | ✅ | 4 | tune mount config |
+| `sys/internal/ui/mounts` | ✅ | 5 | mount-version preflight for the `kv` CLI |
 | `sys/policies/acl` | ✅ | 3 | CRUD ACL policies (+ legacy `sys/policy`) |
 | `sys/capabilities-self` | ✅ | 3 | + `sys/capabilities` |
 | `sys/leases/*` | ⬜ | 6 | lookup/renew/revoke/revoke-prefix |
@@ -27,15 +28,15 @@ A living matrix of Vault-compatible endpoints keephippo implements. Status:
 | Method | Status | Phase | Notes |
 |--------|:------:|:-----:|-------|
 | `token` | ✅ | 3 | create/lookup(-self)/renew/revoke, accessors, TTL, num_uses |
-| `userpass` | ⬜ | 5 | |
-| `approle` | ⬜ | 5 | |
+| `userpass` | ✅ | 5 | users CRUD (bcrypt), login → policy-scoped token |
+| `approle` | ✅ | 5 | role/role-id/secret-id, constant-time login, secret_id TTL/num-uses |
 
 ## Secrets engines
 
 | Engine | Status | Phase | Notes |
 |--------|:------:|:-----:|-------|
 | `kv` v1 | ✅ | 2 | unversioned put/get/list/delete |
-| `kv` v2 | ⬜ | 5 | versioned |
+| `kv` v2 | ✅ | 5 | versioning, data/metadata, delete/undelete/destroy, CAS, max_versions |
 | `transit` | ⬜ | 6 | encryption as a service |
 | `cubbyhole` | ⬜ | 7 | per-token store |
 

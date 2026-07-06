@@ -39,4 +39,26 @@ export VAULT_ADDR="$ADDR" VAULT_TOKEN="$TOKEN" BAO_ADDR="$ADDR" BAO_TOKEN="$TOKE
 echo "-- $CLI read secret/compat --"
 "$CLI" read secret/compat
 
+# --- KV v2: enable with keephippo, drive the full v2 lifecycle with the foreign CLI ---
+echo "-- $CLI kv (v2) lifecycle against keephippo --"
+"$BIN" secrets enable -version=2 -path=kv2 kv >/dev/null
+"$CLI" kv put kv2/thing greeting=hello >/dev/null
+"$CLI" kv put kv2/thing greeting=world >/dev/null
+"$CLI" kv get kv2/thing
+"$CLI" kv get -version=1 kv2/thing >/dev/null
+"$CLI" kv metadata get kv2/thing >/dev/null
+"$CLI" kv delete kv2/thing >/dev/null
+"$CLI" kv undelete -versions=2 kv2/thing >/dev/null
+"$CLI" kv destroy -versions=1 kv2/thing >/dev/null
+echo "   KV v2 put/get/-version/metadata/delete/undelete/destroy OK"
+
+# --- AppRole: enable with keephippo, log in with the foreign CLI ---
+echo "-- $CLI AppRole login against keephippo --"
+"$BIN" auth enable approle >/dev/null
+"$CLI" write auth/approle/role/demo token_policies=default >/dev/null
+ROLE_ID=$("$CLI" read -field=role_id auth/approle/role/demo/role-id)
+SECRET_ID=$("$CLI" write -f -field=secret_id auth/approle/role/demo/secret-id)
+"$CLI" write auth/approle/login role_id="$ROLE_ID" secret_id="$SECRET_ID" >/dev/null
+echo "   AppRole role_id + secret_id login OK"
+
 echo "==> Live cross-check completed."

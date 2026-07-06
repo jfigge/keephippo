@@ -35,7 +35,7 @@ func assertCoded(t *testing.T, err error, want int) {
 
 func TestMountAndKVFlow(t *testing.T) {
 	c, root := setupUnsealed(t)
-	if err := c.EnableMount("secret", "kv"); err != nil {
+	if err := c.EnableMount("secret", "kv", nil); err != nil {
 		t.Fatalf("enable: %v", err)
 	}
 
@@ -67,7 +67,7 @@ func TestMountAndKVFlow(t *testing.T) {
 
 func TestAuthAndRouting(t *testing.T) {
 	c, root := setupUnsealed(t)
-	if err := c.EnableMount("secret", "kv"); err != nil {
+	if err := c.EnableMount("secret", "kv", nil); err != nil {
 		t.Fatalf("enable: %v", err)
 	}
 
@@ -91,7 +91,7 @@ func TestMountPersistsAcrossRestart(t *testing.T) {
 	if _, err := c1.Unseal(res.Keys[0]); err != nil {
 		t.Fatalf("unseal: %v", err)
 	}
-	if err := c1.EnableMount("secret", "kv"); err != nil {
+	if err := c1.EnableMount("secret", "kv", nil); err != nil {
 		t.Fatalf("enable: %v", err)
 	}
 	if _, err := c1.HandleRequest(&logical.Request{Operation: logical.CreateOperation, Path: "secret/foo", Data: map[string]any{"a": "b"}, ClientToken: res.RootToken}); err != nil {
@@ -114,7 +114,7 @@ func TestMountPersistsAcrossRestart(t *testing.T) {
 
 func TestRemountPreservesData(t *testing.T) {
 	c, root := setupUnsealed(t)
-	if err := c.EnableMount("secret", "kv"); err != nil {
+	if err := c.EnableMount("secret", "kv", nil); err != nil {
 		t.Fatalf("enable: %v", err)
 	}
 	if _, err := c.HandleRequest(&logical.Request{Operation: logical.CreateOperation, Path: "secret/foo", Data: map[string]any{"a": "b"}, ClientToken: root}); err != nil {
@@ -138,7 +138,7 @@ func TestRemountPreservesData(t *testing.T) {
 
 func TestAuthorizeScopedPolicy(t *testing.T) {
 	c, root := setupUnsealed(t)
-	if err := c.EnableMount("secret", "kv"); err != nil {
+	if err := c.EnableMount("secret", "kv", nil); err != nil {
 		t.Fatalf("enable: %v", err)
 	}
 	rootReq := func(op logical.Operation, path string, data map[string]any) (*logical.Response, error) {

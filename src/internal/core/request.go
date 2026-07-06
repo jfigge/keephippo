@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jfigge/keephippo/internal/logical"
 	"github.com/jfigge/keephippo/internal/policy"
@@ -27,6 +28,19 @@ func (c *Core) HandleRequest(req *logical.Request) (*logical.Response, error) {
 	if c.barrier.Sealed() {
 		return nil, &CodedError{Status: 503, Message: "keephippo is sealed"}
 	}
+
+	// Login fast-path: an auth method may declare some of its paths (the login
+	// paths) reachable without a token. These bypass the token guard and ACL;
+	// the backend verifies the credential and core mints the token.
+	c.mu.RLock()
+	authMB, authRel := c.matchAuth(req.Path)
+	c.mu.RUnlock()
+	if authMB != nil {
+		if u, ok := authMB.backend.(logical.Unauthenticated); ok && u.IsUnauthenticated(req.Operation, authRel) {
+			return c.handleLogin(req, authMB, authRel)
+		}
+	}
+
 	if req.ClientToken == "" {
 		return nil, &CodedError{Status: 400, Message: "missing client token"}
 	}
@@ -46,9 +60,50 @@ func (c *Core) HandleRequest(req *logical.Request) (*logical.Response, error) {
 		return c.handleSystem(req, te)
 	case strings.HasPrefix(req.Path, "auth/token/"):
 		return c.handleTokenAuth(req, te)
+	case strings.HasPrefix(req.Path, "auth/"):
+		return c.dispatchAuth(req)
 	default:
 		return c.dispatchLogical(req)
 	}
+}
+
+// handleLogin dispatches an unauthenticated login to an auth backend and mints
+// the real token from the Auth block it returns. The backend supplies the
+// credential-bound policies/TTL/metadata but never a ClientToken — that is
+// core's to issue.
+func (c *Core) handleLogin(req *logical.Request, mb *mountedBackend, rel string) (*logical.Response, error) {
+	req.Path = rel
+	req.Storage = mb.view
+	resp, err := mb.backend.HandleRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp == nil || resp.Auth == nil {
+		return nil, &CodedError{Status: 400, Message: "login failed"}
+	}
+	a := resp.Auth
+
+	// Attach the default policy (Vault does this for method-issued tokens) unless
+	// the method already granted root.
+	policies := a.Policies
+	if !containsString(policies, "root") && !containsString(policies, "default") {
+		policies = append([]string{"default"}, policies...)
+	}
+
+	te, err := c.tokens.create(CreateTokenParams{
+		Policies:    policies,
+		TTL:         time.Duration(a.LeaseDuration) * time.Second,
+		NumUses:     a.NumUses,
+		DisplayName: a.DisplayName,
+		Renewable:   a.Renewable,
+	})
+	if err != nil {
+		return nil, err
+	}
+	auth := c.authFor(te)
+	auth.DisplayName = a.DisplayName
+	auth.Metadata = a.Metadata
+	return &logical.Response{Auth: auth}, nil
 }
 
 // authorize enforces the token's ACL against the request path and operation.
@@ -129,12 +184,36 @@ func (c *Core) dispatchLogical(req *logical.Request) (*logical.Response, error) 
 	return mb.backend.HandleRequest(req)
 }
 
-// matchMount finds the mount whose path is the longest prefix of path, and
-// returns the request path relative to that mount. Callers hold c.mu.
+func (c *Core) dispatchAuth(req *logical.Request) (*logical.Response, error) {
+	c.mu.RLock()
+	mb, rel := c.matchAuth(req.Path)
+	c.mu.RUnlock()
+	if mb == nil {
+		return nil, &CodedError{Status: 404, Message: fmt.Sprintf("no handler for route %q", req.Path)}
+	}
+	req.Path = rel
+	req.Storage = mb.view
+	return mb.backend.HandleRequest(req)
+}
+
+// matchMount finds the secret mount whose path is the longest prefix of path.
+// Callers hold c.mu.
 func (c *Core) matchMount(path string) (*mountedBackend, string) {
+	return longestPrefixMount(c.router, path)
+}
+
+// matchAuth finds the auth mount (keyed "auth/<path>/") whose path is the
+// longest prefix of path. Callers hold c.mu.
+func (c *Core) matchAuth(path string) (*mountedBackend, string) {
+	return longestPrefixMount(c.authRouter, path)
+}
+
+// longestPrefixMount returns the router entry whose "<path>/" key is the longest
+// prefix of path, along with the request path made relative to that mount.
+func longestPrefixMount(router map[string]*mountedBackend, path string) (*mountedBackend, string) {
 	var best *mountedBackend
 	var bestPath string
-	for p, mb := range c.router {
+	for p, mb := range router {
 		root := strings.TrimSuffix(p, "/")
 		if path == root || strings.HasPrefix(path, p) {
 			if best == nil || len(p) > len(bestPath) {

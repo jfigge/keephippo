@@ -43,7 +43,8 @@ type Core struct {
 	policies   *policyStore
 	mounts     *mountTable
 	authMounts *mountTable
-	router     map[string]*mountedBackend
+	router     map[string]*mountedBackend // secret mounts, keyed by "<path>/"
+	authRouter map[string]*mountedBackend // auth mounts, keyed by "auth/<path>/"
 }
 
 // New builds a sealed core over phys. storageType is reported in seal-status
@@ -60,6 +61,7 @@ func New(phys physical.Backend, storageType string) *Core {
 		mounts:      &mountTable{},
 		authMounts:  &mountTable{},
 		router:      make(map[string]*mountedBackend),
+		authRouter:  make(map[string]*mountedBackend),
 	}
 }
 
