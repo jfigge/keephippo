@@ -3,8 +3,9 @@ name: Release
 # Cut by `make release VERSION=x.y.z` (scripts/release.sh), which pushes a
 # vX.Y.Z tag. This builds the cross-platform binaries via GoReleaser
 # (src/.goreleaser.yaml), publishes the GitHub Release with the archives +
-# checksums, then dispatches the Deploy site workflow so the Downloads page
-# (website/versions.json) picks up the new release.
+# checksums, pushes the multi-arch container image to ghcr.io and the Homebrew
+# cask to jfigge/homebrew-tap, then dispatches the Deploy site workflow so the
+# Downloads page (website/versions.json) picks up the new release.
 on:
   push:
     tags: ["v*"]
@@ -22,6 +23,7 @@ jobs:
     permissions:
       contents: write
       actions: write # dispatch the deploy-site workflow after publishing
+      packages: write # push container images to ghcr.io/jfigge/keephippo
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -31,6 +33,17 @@ jobs:
           go-version-file: src/go.mod
           cache: true
           cache-dependency-path: src/go.sum
+
+      # Multi-arch container images: QEMU emulates linux/arm64 on the amd64
+      # runner, buildx is the builder GoReleaser drives, and the login lets it
+      # push to ghcr.io using the workflow's GITHUB_TOKEN (packages:write above).
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       # Runs from src/ so it finds .goreleaser.yaml there; artifacts land in dist/.
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
@@ -51,6 +64,8 @@ jobs:
           MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
           # Homebrew tap push — skipped (formula still built) when unset.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          # Scoop bucket push — skipped (manifest still built) when unset.
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
 
       - name: Refresh Downloads page (versions.json tracks the new release)
         env:

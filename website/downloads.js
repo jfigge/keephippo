@@ -41,7 +41,13 @@ async function render() {
     if (rows.length) {
       html += `<h2 style="margin-top:28px">Install</h2>`;
       for (const [label, cmd] of rows) {
-        html += `<p class="muted" style="margin:14px 0 4px">${esc(label)}</p><pre class="code"><span class="p">$</span> ${esc(cmd)}</pre>`;
+        // A command may span multiple lines (e.g. Scoop: add the bucket, then
+        // install); give each its own prompt.
+        const body = String(cmd)
+          .split("\n")
+          .map((line) => `<span class="p">$</span> ${esc(line)}`)
+          .join("\n");
+        html += `<p class="muted" style="margin:14px 0 4px">${esc(label)}</p><pre class="code">${body}</pre>`;
       }
     }
   }

@@ -57,7 +57,9 @@ async function main() {
     install: latest
       ? {
           brew: "brew install jfigge/tap/keephippo",
-          scoop: "scoop install keephippo",
+          // Scoop needs the bucket added once before the install; both lines are
+          // rendered as a two-command snippet on the Downloads page.
+          scoop: "scoop bucket add jfigge https://github.com/jfigge/scoop-bucket\nscoop install keephippo",
           container: `docker pull ghcr.io/jfigge/keephippo:${String(latest).replace(/^v/, "")}`,
         }
       : null,

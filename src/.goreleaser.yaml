@@ -107,3 +107,60 @@ homebrew_casks:
           if OS.mac?
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/keephippo"]
           end
+
+# Build and publish a multi-arch container image to the GitHub Container Registry
+# (ghcr.io/jfigge/keephippo). GoReleaser drives a single `docker buildx` pass
+# that compiles linux/amd64 + linux/arm64 into one manifest list, so
+# `docker pull ghcr.io/jfigge/keephippo:<version>` resolves the caller's arch.
+# It runs only on `goreleaser release` (not `build` / `--snapshot`), so
+# `make dist` and local builds never need Docker. The Release workflow sets up
+# QEMU + buildx and logs in to ghcr before this runs; the first push creates the
+# package *private* — make it public once in the repo's package settings for
+# anonymous `docker pull` to work.
+dockers_v2:
+  - id: keephippo
+    ids: [keephippo]
+    dockerfile: ../Dockerfile # goreleaser runs from src/; Dockerfile is at repo root
+    flags:
+      - "--pull" # always refresh the distroless base
+    images:
+      - ghcr.io/jfigge/keephippo
+    tags:
+      - "{{ .Version }}"
+      # Skip moving :latest for prereleases (matches release.prerelease: auto);
+      # the empty tag is ignored, so :latest stays on the last stable release.
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      org.opencontainers.image.title: "{{ .ProjectName }}"
+      org.opencontainers.image.description: "Vault-compatible secrets manager — server + console (CLI)"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.source: "https://github.com/jfigge/keephippo"
+      org.opencontainers.image.url: "https://keephippo.com/"
+      org.opencontainers.image.licenses: "MPL-2.0"
+
+# Publish a Scoop manifest to jfigge/scoop-bucket so Windows users can
+# `scoop bucket add jfigge https://github.com/jfigge/scoop-bucket` and then
+# `scoop install keephippo`. The manifest points at the release's windows zip
+# archives (amd64 + arm64). Like the Homebrew cask, it is generated every build
+# but only pushed when SCOOP_BUCKET_TOKEN is set (a PAT with contents:write on
+# the bucket repo) — empty on PR/snapshot/local runs, so those skip the upload
+# and still succeed.
+scoops:
+  - name: keephippo
+    repository:
+      owner: jfigge
+      name: scoop-bucket
+      branch: main
+      token: '{{ index .Env "SCOOP_BUCKET_TOKEN" }}'
+    directory: bucket
+    homepage: "https://keephippo.com/"
+    description: "Vault-compatible secrets manager — server + console (CLI)"
+    license: MPL-2.0
+    skip_upload: '{{ if eq (index .Env "SCOOP_BUCKET_TOKEN") "" }}true{{ else }}false{{ end }}'
+    commit_author:
+      name: goreleaser-bot
+      email: 41898282+github-actions[bot]@users.noreply.github.com
