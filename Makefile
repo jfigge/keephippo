@@ -43,7 +43,7 @@ LDFLAGS    := -s -w \
 
 .PHONY: all help version info install debug dev fmt fmt-check lint test e2e compat vuln \
 	build build-mac build-linux build-win dist dist-mac dist-linux dist-win \
-	sign-mac sign-win release dev-certs clean
+	sign-mac sign-win release dev-certs icons clean
 
 # ---- meta ----
 all: clean fmt lint test build ## Full pipeline: clean → fmt → lint → test → build
@@ -171,6 +171,9 @@ release: ## Cut a release: make release VERSION=1.2.3
 # ---- helpers ----
 dev-certs: ## Generate self-signed TLS certs into src/testdata/
 	@./scripts/gen-cert.sh
+
+icons: ## Regenerate the app icon set from icons/keephippo.png → src/web/icons/
+	@$(GO) run scripts/make-icons.go
 
 clean: ## Remove build/ and dist/
 	@rm -rf $(BUILD_DIR) $(DIST_DIR)

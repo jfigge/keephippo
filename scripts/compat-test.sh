@@ -30,7 +30,8 @@ trap 'kill $PID 2>/dev/null' EXIT
 ADDR="http://127.0.0.1:8200"
 curl -s --retry 30 --retry-connrefused --retry-delay 1 "$ADDR/v1/sys/seal-status" >/dev/null
 TOKEN=$(awk -F': ' '/Root Token/{print $2}' /tmp/keephippo-compat.log)
-export VAULT_ADDR="$ADDR" VAULT_TOKEN="$TOKEN"
+# Export both Vault- and OpenBao-style env vars so the CLI finds them either way.
+export VAULT_ADDR="$ADDR" VAULT_TOKEN="$TOKEN" BAO_ADDR="$ADDR" BAO_TOKEN="$TOKEN"
 
 "$BIN" secrets enable -path=secret kv >/dev/null
 "$BIN" kv put secret/compat greeting=hello >/dev/null
