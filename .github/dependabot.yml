@@ -20,3 +20,14 @@ updates:
       actions:
         patterns:
           - "*"
+    ignore:
+      # actions/deploy-pages v5, upload-pages-artifact v5, and configure-pages v6
+      # reproducibly fail this repo's Pages deploy with "deployment_failed" (the
+      # v4/v3/v5 set deploys cleanly). Hold the working majors until the newer
+      # line is verified against this Pages/custom-domain setup.
+      - dependency-name: "actions/deploy-pages"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "actions/upload-pages-artifact"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "actions/configure-pages"
+        update-types: ["version-update:semver-major"]
