@@ -29,6 +29,7 @@ func newUnsealedServer(t *testing.T) (string, string) {
 	}
 	srv := httptest.NewServer(kphttp.NewServer(c).Handler())
 	t.Cleanup(srv.Close)
+	t.Cleanup(func() { _ = c.Seal() }) // stop the background expiration revoker
 	return srv.URL, res.RootToken
 }
 

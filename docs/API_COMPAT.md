@@ -19,7 +19,7 @@ A living matrix of Vault-compatible endpoints keephippo implements. Status:
 | `sys/internal/ui/mounts` | ✅ | 5 | mount-version preflight for the `kv` CLI |
 | `sys/policies/acl` | ✅ | 3 | CRUD ACL policies (+ legacy `sys/policy`) |
 | `sys/capabilities-self` | ✅ | 3 | + `sys/capabilities` |
-| `sys/leases/*` | ⬜ | 6 | lookup/renew/revoke/revoke-prefix |
+| `sys/leases/*` | ✅ | 6 | lookup/renew/revoke/revoke-prefix/revoke-force; background auto-revoke |
 | `sys/audit` | 🚧 | 4/7 | list wired (empty); devices in Phase 7 |
 | `sys/wrapping/*` | ⬜ | 7 | wrap/unwrap/lookup/rewrap |
 
@@ -37,7 +37,7 @@ A living matrix of Vault-compatible endpoints keephippo implements. Status:
 |--------|:------:|:-----:|-------|
 | `kv` v1 | ✅ | 2 | unversioned put/get/list/delete |
 | `kv` v2 | ✅ | 5 | versioning, data/metadata, delete/undelete/destroy, CAS, max_versions |
-| `transit` | ⬜ | 6 | encryption as a service |
+| `transit` | ✅ | 6 | encrypt/decrypt/rewrap, sign/verify, hmac, datakey; aes/chacha/ed25519/ecdsa; key rotation |
 | `cubbyhole` | ⬜ | 7 | per-token store |
 
 ## Wire conventions

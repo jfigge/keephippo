@@ -38,6 +38,18 @@ func (c *Core) handleSystem(req *logical.Request, te *TokenEntry) (*logical.Resp
 			return nil, c.DisableAuth(name)
 		}
 		return nil, c.EnableAuth(name, stringField(req.Data, "type"))
+	case sub == "leases/lookup":
+		return c.sysLeaseLookup(req)
+	case strings.HasPrefix(sub, "leases/lookup/"):
+		return c.sysLeaseList(strings.TrimPrefix(sub, "leases/lookup/"))
+	case sub == "leases/renew" || strings.HasPrefix(sub, "leases/renew/"):
+		return c.sysLeaseRenew(req)
+	case strings.HasPrefix(sub, "leases/revoke-prefix/"):
+		return c.sysLeaseRevokePrefix(strings.TrimPrefix(sub, "leases/revoke-prefix/"))
+	case strings.HasPrefix(sub, "leases/revoke-force/"):
+		return c.sysLeaseRevokePrefix(strings.TrimPrefix(sub, "leases/revoke-force/"))
+	case sub == "leases/revoke" || strings.HasPrefix(sub, "leases/revoke/"):
+		return c.sysLeaseRevoke(req, strings.TrimPrefix(sub, "leases/revoke/"))
 	case sub == "audit":
 		return &logical.Response{Data: map[string]any{}}, nil
 	case strings.HasPrefix(sub, "audit/"):
@@ -63,6 +75,63 @@ func (c *Core) handleSystem(req *logical.Request, te *TokenEntry) (*logical.Resp
 	default:
 		return nil, &CodedError{Status: 404, Message: fmt.Sprintf("unsupported path %q", req.Path)}
 	}
+}
+
+func (c *Core) sysLeaseLookup(req *logical.Request) (*logical.Response, error) {
+	id := stringField(req.Data, "lease_id")
+	if id == "" {
+		return nil, &CodedError{Status: 400, Message: "missing lease_id"}
+	}
+	data, err := c.expiration.lookup(id)
+	if err != nil {
+		return nil, err
+	}
+	return &logical.Response{Data: data}, nil
+}
+
+func (c *Core) sysLeaseList(prefix string) (*logical.Response, error) {
+	keys, err := c.expiration.listPrefix(prefix)
+	if err != nil {
+		return nil, err
+	}
+	return logical.ListResponse(keys), nil
+}
+
+func (c *Core) sysLeaseRenew(req *logical.Request) (*logical.Response, error) {
+	id := stringField(req.Data, "lease_id")
+	if id == "" {
+		return nil, &CodedError{Status: 400, Message: "missing lease_id"}
+	}
+	ttl, err := c.expiration.renew(id, durationField(req.Data, "increment"))
+	if err != nil {
+		return nil, err
+	}
+	return &logical.Response{Data: map[string]any{
+		"lease_id":       id,
+		"lease_duration": ttl,
+		"renewable":      true,
+	}}, nil
+}
+
+func (c *Core) sysLeaseRevoke(req *logical.Request, pathID string) (*logical.Response, error) {
+	id := pathID
+	if id == "" {
+		id = stringField(req.Data, "lease_id")
+	}
+	if id == "" {
+		return nil, &CodedError{Status: 400, Message: "missing lease_id"}
+	}
+	return nil, c.expiration.revoke(id)
+}
+
+func (c *Core) sysLeaseRevokePrefix(prefix string) (*logical.Response, error) {
+	if prefix == "" {
+		return nil, &CodedError{Status: 400, Message: "missing prefix"}
+	}
+	if _, err := c.expiration.revokePrefix(prefix); err != nil {
+		return nil, err
+	}
+	return nil, nil
 }
 
 func (c *Core) sysListMounts() (*logical.Response, error) {

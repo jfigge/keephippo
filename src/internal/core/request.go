@@ -100,6 +100,9 @@ func (c *Core) handleLogin(req *logical.Request, mb *mountedBackend, rel string)
 	if err != nil {
 		return nil, err
 	}
+	if _, err := c.expiration.registerToken(te); err != nil {
+		return nil, err
+	}
 	auth := c.authFor(te)
 	auth.DisplayName = a.DisplayName
 	auth.Metadata = a.Metadata
@@ -167,6 +170,10 @@ func isSelfPath(path string) bool {
 func isSudoPath(path string) bool {
 	switch path {
 	case "sys/seal", "sys/remount", "sys/step-down":
+		return true
+	}
+	// Bulk lease revocation is sudo-gated (matching Vault).
+	if strings.HasPrefix(path, "sys/leases/revoke-prefix/") || strings.HasPrefix(path, "sys/leases/revoke-force/") {
 		return true
 	}
 	return false

@@ -41,6 +41,7 @@ type Core struct {
 
 	tokens     *tokenStore
 	policies   *policyStore
+	expiration *expirationManager
 	mounts     *mountTable
 	authMounts *mountTable
 	router     map[string]*mountedBackend // secret mounts, keyed by "<path>/"
@@ -51,13 +52,15 @@ type Core struct {
 // (e.g. "file" or "inmem").
 func New(phys physical.Backend, storageType string) *Core {
 	b := barrier.New(phys)
+	ts := newTokenStore(b)
 	return &Core{
 		physical:    phys,
 		barrier:     b,
 		seal:        seal.NewShamir(),
 		storageType: storageType,
-		tokens:      newTokenStore(b),
+		tokens:      ts,
 		policies:    newPolicyStore(b),
+		expiration:  newExpirationManager(b, ts),
 		mounts:      &mountTable{},
 		authMounts:  &mountTable{},
 		router:      make(map[string]*mountedBackend),
@@ -180,11 +183,13 @@ func (c *Core) Unseal(share []byte) (sealed bool, err error) {
 	if err := c.setupMounts(); err != nil {
 		return true, err
 	}
+	c.expiration.start()
 	return false, nil
 }
 
 // Seal seals the barrier and discards any in-flight unseal progress.
 func (c *Core) Seal() error {
+	c.expiration.stop()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.seal.Reset()

@@ -62,6 +62,9 @@ func (c *Core) tokenCreate(req *logical.Request, caller *TokenEntry) (*logical.R
 	if err != nil {
 		return nil, err
 	}
+	if _, err := c.expiration.registerToken(te); err != nil {
+		return nil, err
+	}
 	return &logical.Response{Auth: c.authFor(te)}, nil
 }
 

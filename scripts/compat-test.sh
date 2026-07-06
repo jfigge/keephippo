@@ -61,4 +61,16 @@ SECRET_ID=$("$CLI" write -f -field=secret_id auth/approle/role/demo/secret-id)
 "$CLI" write auth/approle/login role_id="$ROLE_ID" secret_id="$SECRET_ID" >/dev/null
 echo "   AppRole role_id + secret_id login OK"
 
+# --- transit: enable with keephippo, encrypt/decrypt/rotate/rewrap with the foreign CLI ---
+echo "-- $CLI transit encrypt/decrypt against keephippo --"
+"$BIN" secrets enable transit >/dev/null
+"$CLI" write -f transit/keys/demo >/dev/null
+PT=$(printf 'compat-secret' | base64)
+CT=$("$CLI" write -field=ciphertext transit/encrypt/demo plaintext="$PT")
+OUT=$("$CLI" write -field=plaintext transit/decrypt/demo ciphertext="$CT" | base64 --decode)
+if [[ "$OUT" != "compat-secret" ]]; then echo "transit decrypt mismatch: $OUT" >&2; exit 1; fi
+"$CLI" write -f transit/keys/demo/rotate >/dev/null
+"$CLI" write -field=ciphertext transit/rewrap/demo ciphertext="$CT" >/dev/null
+echo "   transit encrypt/decrypt/rotate/rewrap OK"
+
 echo "==> Live cross-check completed."

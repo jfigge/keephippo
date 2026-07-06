@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	kvengine "github.com/jfigge/keephippo/builtin/logical/kv"
+	transitengine "github.com/jfigge/keephippo/builtin/logical/transit"
 	"github.com/jfigge/keephippo/internal/barrier"
 	"github.com/jfigge/keephippo/internal/logical"
 	"github.com/jfigge/keephippo/internal/physical"
@@ -135,6 +136,8 @@ func (c *Core) newMountedBackend(e *MountEntry) (*mountedBackend, error) {
 		} else {
 			backend = kvengine.New(view)
 		}
+	case "transit":
+		backend = transitengine.New(view)
 	default:
 		return nil, fmt.Errorf("core: unknown backend type %q", e.Type)
 	}
@@ -171,7 +174,7 @@ func (c *Core) EnableMount(path, typ string, options map[string]any) error {
 	if _, ok := c.router[path]; ok {
 		return &CodedError{Status: 400, Message: fmt.Sprintf("path %q is already in use", path)}
 	}
-	if typ != "kv" {
+	if typ != "kv" && typ != "transit" {
 		return &CodedError{Status: 400, Message: fmt.Sprintf("unknown backend type %q", typ)}
 	}
 
