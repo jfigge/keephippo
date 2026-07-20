@@ -15,8 +15,8 @@ github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/mitchellh/go-wordwrap v1.0.1 h1:TLuKupo69TCn6TQSyGxwI1EblZZEsQ0vMlAFQflz0v0=
 github.com/mitchellh/go-wordwrap v1.0.1/go.mod h1:R62XHJLzvMFRBbcrT7m7WgmE1eOyTSsCt+hzestvNj0=
-github.com/openbao/openbao/sdk/v2 v2.6.0 h1:zB2pI+3vRfbGWMpZvhPwAqjFs/c0uNPuzx0FTVJBm7g=
-github.com/openbao/openbao/sdk/v2 v2.6.0/go.mod h1:lAZpv+olMy8zq3UP5w05zRfrF7nPpuayfKNnuFx+f4I=
+github.com/openbao/openbao/sdk/v2 v2.6.1 h1:KuxzQ9NuD9w65imhJpTyrczL7R6ou9DwH7ZNnY4Srww=
+github.com/openbao/openbao/sdk/v2 v2.6.1/go.mod h1:pWqnpQyqe+yomeN9z8/QspFTruLusi9oyihf0uPyo/M=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
