@@ -1,0 +1,2412 @@
+# keephippo — OpenAPI 3.0 description of the /v1/* HTTP API.
+#
+# This file is hand-maintained and MUST be kept in sync with the server. When you
+# add, remove, or change any endpoint (path, method, request field, or response
+# shape), update this file in the same change. It is embedded in the binary and
+# served, together with Swagger UI, at /swagger.
+#
+# Copyright (c) the keephippo authors
+# SPDX-License-Identifier: MPL-2.0
+openapi: 3.0.3
+info:
+  title: keephippo API
+  version: 0.2.0
+  description: |
+    keephippo is a from-scratch, **Vault-compatible** secrets manager. This
+    document describes its HTTP API, which replicates HashiCorp Vault's wire
+    format so existing Vault clients keep working.
+
+    ## Conventions
+
+    - **Base path.** Every endpoint lives under `/v1/`. The `servers` entry below
+      already includes it, so the paths in this document are written without the
+      `/v1` prefix.
+    - **Authentication.** Send your token in the `X-Vault-Token` request header
+      (`VaultToken` scheme). Every endpoint requires it **except** the pre-unseal
+      control plane (`sys/health`, `sys/seal-status`, `sys/init`, `sys/unseal`)
+      and the auth-method `login` paths.
+    - **Writes.** `POST` and `PUT` are interchangeable on every write endpoint;
+      this document lists `post`, but `put` behaves identically.
+    - **Listing.** A list is a `GET` with `?list=true` (Vault also accepts the
+      custom `LIST` method). List responses return `{ "data": { "keys": [...] } }`.
+    - **Response envelope.** Successful logical responses are wrapped as
+      `{ request_id, lease_id, renewable, lease_duration, data, wrap_info,
+      warnings, auth }`. Endpoint-specific fields live inside `data` (or inside
+      `auth` for logins / token creation). A read that finds nothing returns
+      `404`; a write or delete with no body returns `204`.
+    - **Response wrapping.** Any request may set the `X-Vault-Wrap-TTL` header (a
+      Go duration such as `120s` or a bare number of seconds). When present, the
+      real `data` is stored in a single-use wrapping token's cubbyhole and the
+      response instead carries `wrap_info`.
+    - **Sudo.** `sys/seal`, `sys/remount`, and the lease `revoke-prefix` /
+      `revoke-force` endpoints additionally require a root/sudo-capable token.
+
+    > ⚠️ Educational / portfolio project. **Not security-audited.**
+  license:
+    name: MPL-2.0
+    url: https://www.mozilla.org/en-US/MPL/2.0/
+externalDocs:
+  description: API compatibility scoreboard
+  url: https://github.com/jfigge/keephippo/blob/main/docs/API_COMPAT.md
+servers:
+  - url: /v1
+    description: The running keephippo server (relative to wherever this page is served).
+
+tags:
+  - name: Seal & Init
+    description: Pre-unseal control plane — initialize, unseal, seal (mostly unauthenticated).
+  - name: System
+    description: Mounts, auth-method management, remount, and internal UI helpers.
+  - name: Policies
+    description: ACL policy CRUD and capability inspection.
+  - name: Leases
+    description: Lease lookup, renewal, and revocation.
+  - name: Audit
+    description: Audit device management and audit-log HMAC.
+  - name: Wrapping
+    description: Response wrapping — wrap, unwrap, lookup, rewrap.
+  - name: Auth - Token
+    description: Token creation, lookup, renewal, and revocation.
+  - name: Auth - Userpass
+    description: Username/password auth method.
+  - name: Auth - AppRole
+    description: AppRole (role-id / secret-id) auth method.
+  - name: Auth - Cert
+    description: TLS client-certificate auth method.
+  - name: Secrets - KV v1
+    description: Unversioned key/value engine.
+  - name: Secrets - KV v2
+    description: Versioned key/value engine (data / metadata / delete / undelete / destroy).
+  - name: Secrets - Transit
+    description: Encryption-as-a-service — encrypt, decrypt, sign, verify, hmac, datakey.
+  - name: Secrets - Cubbyhole
+    description: Per-token private store, destroyed on token revocation.
+  - name: Secrets - TOTP
+    description: RFC 6238 time-based one-time-password codes.
+  - name: Identity
+    description: Entities, entity aliases, and groups.
+
+security:
+  - VaultToken: []
+
+paths:
+  # ------------------------------------------------------------------ Seal & Init
+  /sys/health:
+    get:
+      tags: [Seal & Init]
+      operationId: sysHealth
+      summary: Health check
+      description: |
+        Returns server health. Status code encodes state: `200` healthy,
+        `501` not initialized, `503` sealed.
+      security: []
+      responses:
+        '200':
+          description: Healthy (initialized and unsealed).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+        '501':
+          description: Not initialized.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+        '503':
+          description: Sealed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+
+  /sys/seal-status:
+    get:
+      tags: [Seal & Init]
+      operationId: sysSealStatus
+      summary: Seal status
+      security: []
+      responses:
+        '200':
+          description: Current seal state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SealStatus' }
+
+  /sys/init:
+    post:
+      tags: [Seal & Init]
+      operationId: sysInit
+      summary: Initialize the server
+      description: Generates the master key, splits it into Shamir shares, and mints the root token. One-time.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                secret_shares:
+                  type: integer
+                  description: Number of key shares to split the master key into.
+                  example: 1
+                secret_threshold:
+                  type: integer
+                  description: Number of shares required to reconstruct the master key.
+                  example: 1
+      responses:
+        '200':
+          description: Initialized. Returns the unseal key shares and the root token.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items: { type: string }
+                    description: Unseal key shares, hex-encoded.
+                  keys_base64:
+                    type: array
+                    items: { type: string }
+                    description: Unseal key shares, base64-encoded.
+                  root_token:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /sys/unseal:
+    post:
+      tags: [Seal & Init]
+      operationId: sysUnseal
+      summary: Submit an unseal key share
+      description: Submits a single unseal key share. Repeat until the threshold is met and the server unseals.
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  description: One unseal key share, hex- or base64-encoded.
+                reset:
+                  type: boolean
+                  description: Discard any in-progress unseal attempt.
+      responses:
+        '200':
+          description: Current seal status after applying the share.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SealStatus' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /sys/seal:
+    post:
+      tags: [Seal & Init]
+      operationId: sysSeal
+      summary: Seal the server
+      description: Seals the barrier and discards the in-memory master key. Requires a sudo-capable token.
+      responses:
+        '204': { description: Sealed. }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ------------------------------------------------------------------ System / Mounts
+  /sys/mounts:
+    get:
+      tags: [System]
+      operationId: sysListMounts
+      summary: List mounted secrets engines
+      responses:
+        '200':
+          description: Map of mount path to mount info.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        additionalProperties: { $ref: '#/components/schemas/MountInfo' }
+
+  /sys/mounts/{path}:
+    parameters:
+      - $ref: '#/components/parameters/MountPath'
+    post:
+      tags: [System]
+      operationId: sysEnableMount
+      summary: Enable a secrets engine
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  type: string
+                  enum: [kv, transit, totp]
+                  description: Secrets engine type.
+                options:
+                  type: object
+                  description: 'Engine options. For kv: `version` ("1" or "2"), `max_versions`, `cas_required`.'
+                  additionalProperties: true
+      responses:
+        '204': { description: Enabled. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      tags: [System]
+      operationId: sysDisableMount
+      summary: Disable a secrets engine (and clear its data)
+      responses:
+        '204': { description: Disabled. }
+
+  /sys/mounts/{path}/tune:
+    parameters:
+      - $ref: '#/components/parameters/MountPath'
+    get:
+      tags: [System]
+      operationId: sysReadMountTune
+      summary: Read mount tunables
+      responses:
+        '200':
+          description: Tunable configuration (description plus engine options).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+    post:
+      tags: [System]
+      operationId: sysTuneMount
+      summary: Tune a mount
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description: { type: string }
+              additionalProperties: true
+      responses:
+        '204': { description: Tuned. }
+
+  /sys/remount:
+    post:
+      tags: [System]
+      operationId: sysRemount
+      summary: Move a mount (data preserved)
+      description: Requires a sudo-capable token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from, to]
+              properties:
+                from: { type: string, example: secret/ }
+                to: { type: string, example: kv/ }
+      responses:
+        '204': { description: Remounted. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /sys/internal/ui/mounts:
+    get:
+      tags: [System]
+      operationId: sysInternalUIMounts
+      summary: List mounts (UI helper)
+      description: Same output as `sys/mounts`; used by clients for kv v1/v2 preflight.
+      responses:
+        '200':
+          description: Map of mount path to mount info.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+
+  /sys/internal/ui/mounts/{path}:
+    parameters:
+      - $ref: '#/components/parameters/MountPath'
+    get:
+      tags: [System]
+      operationId: sysInternalUIMount
+      summary: Resolve the mount serving a path (UI helper)
+      description: Longest-prefix mount lookup; used by the kv CLI to auto-detect the engine version.
+      responses:
+        '200':
+          description: Mount info for the resolved mount.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/MountInfo' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ------------------------------------------------------------------ System / Auth methods
+  /sys/auth:
+    get:
+      tags: [System]
+      operationId: sysListAuth
+      summary: List enabled auth methods
+      responses:
+        '200':
+          description: Map of auth mount path to method info (always includes `token/`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+
+  /sys/auth/{path}:
+    parameters:
+      - $ref: '#/components/parameters/AuthPath'
+    post:
+      tags: [System]
+      operationId: sysEnableAuth
+      summary: Enable an auth method
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  type: string
+                  enum: [userpass, approle, cert]
+      responses:
+        '204': { description: Enabled. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      tags: [System]
+      operationId: sysDisableAuth
+      summary: Disable an auth method
+      responses:
+        '204': { description: Disabled. }
+
+  # ------------------------------------------------------------------ Policies
+  /sys/policies/acl:
+    get:
+      tags: [Policies]
+      operationId: sysListPolicies
+      summary: List ACL policy names
+      responses:
+        '200':
+          description: Policy names.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          keys: { type: array, items: { type: string } }
+                          policies: { type: array, items: { type: string } }
+
+  /sys/policies/acl/{name}:
+    parameters:
+      - $ref: '#/components/parameters/PolicyName'
+    get:
+      tags: [Policies]
+      operationId: sysReadPolicy
+      summary: Read an ACL policy
+      responses:
+        '200':
+          description: Policy document.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          name: { type: string }
+                          policy: { type: string, description: HCL policy document. }
+                          rules: { type: string, description: Alias of `policy`. }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Policies]
+      operationId: sysWritePolicy
+      summary: Create or update an ACL policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                policy:
+                  type: string
+                  description: HCL policy document (or use `rules`).
+                  example: |
+                    path "secret/data/myapp/*" {
+                      capabilities = ["read", "list"]
+                    }
+                rules: { type: string, description: Alias of `policy`. }
+      responses:
+        '204': { description: Written. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      tags: [Policies]
+      operationId: sysDeletePolicy
+      summary: Delete an ACL policy
+      responses:
+        '204': { description: Deleted. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /sys/capabilities-self:
+    post:
+      tags: [Policies]
+      operationId: sysCapabilitiesSelf
+      summary: Capabilities of the caller's own token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paths: { type: array, items: { type: string } }
+                path: { type: string, description: Single path (alternative to `paths`). }
+      responses:
+        '200':
+          description: Map of path to capability list.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+
+  /sys/capabilities:
+    post:
+      tags: [Policies]
+      operationId: sysCapabilities
+      summary: Capabilities of a given token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+                paths: { type: array, items: { type: string } }
+                path: { type: string }
+      responses:
+        '200':
+          description: Map of path to capability list.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+
+  # ------------------------------------------------------------------ Leases
+  /sys/leases/lookup:
+    post:
+      tags: [Leases]
+      operationId: sysLeaseLookup
+      summary: Look up a lease
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lease_id]
+              properties:
+                lease_id: { type: string }
+      responses:
+        '200':
+          description: Lease metadata.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          issue_time: { type: string, format: date-time }
+                          expire_time: { type: string, format: date-time }
+                          last_renewal: { type: string, nullable: true }
+                          renewable: { type: boolean }
+                          ttl: { type: integer, description: Remaining TTL in seconds. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /sys/leases/lookup/{prefix}:
+    parameters:
+      - $ref: '#/components/parameters/LeasePrefix'
+    get:
+      tags: [Leases]
+      operationId: sysLeaseList
+      summary: List lease IDs under a prefix
+      parameters:
+        - $ref: '#/components/parameters/List'
+      responses:
+        '200':
+          description: Lease IDs.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KeyListResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /sys/leases/renew:
+    post:
+      tags: [Leases]
+      operationId: sysLeaseRenew
+      summary: Renew a lease
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lease_id]
+              properties:
+                lease_id: { type: string }
+                increment: { type: string, description: Requested extension (duration or seconds). }
+      responses:
+        '200':
+          description: Renewed lease.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          lease_id: { type: string }
+                          lease_duration: { type: integer }
+                          renewable: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /sys/leases/revoke:
+    post:
+      tags: [Leases]
+      operationId: sysLeaseRevoke
+      summary: Revoke a lease
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lease_id]
+              properties:
+                lease_id: { type: string }
+      responses:
+        '204': { description: Revoked. }
+
+  /sys/leases/revoke-prefix/{prefix}:
+    parameters:
+      - $ref: '#/components/parameters/LeasePrefix'
+    post:
+      tags: [Leases]
+      operationId: sysLeaseRevokePrefix
+      summary: Revoke all leases under a prefix
+      description: Requires a sudo-capable token.
+      responses:
+        '204': { description: Revoked. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /sys/leases/revoke-force/{prefix}:
+    parameters:
+      - $ref: '#/components/parameters/LeasePrefix'
+    post:
+      tags: [Leases]
+      operationId: sysLeaseRevokeForce
+      summary: Force-revoke all leases under a prefix
+      description: Requires a sudo-capable token.
+      responses:
+        '204': { description: Revoked. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ------------------------------------------------------------------ Audit
+  /sys/audit:
+    get:
+      tags: [Audit]
+      operationId: sysListAudit
+      summary: List audit devices
+      responses:
+        '200':
+          description: Map of audit path to device info.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+
+  /sys/audit/{path}:
+    parameters:
+      - $ref: '#/components/parameters/AuditPath'
+    post:
+      tags: [Audit]
+      operationId: sysEnableAudit
+      summary: Enable an audit device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  type: string
+                  enum: [file, syslog]
+                options:
+                  type: object
+                  description: 'Device options. For `file`: `file_path`. For `syslog`: `tag`. May also be given as flat top-level keys.'
+                  additionalProperties: true
+      responses:
+        '204': { description: Enabled. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      tags: [Audit]
+      operationId: sysDisableAudit
+      summary: Disable an audit device
+      responses:
+        '204': { description: Disabled. }
+
+  /sys/audit-hash/{path}:
+    parameters:
+      - $ref: '#/components/parameters/AuditPath'
+    post:
+      tags: [Audit]
+      operationId: sysAuditHash
+      summary: HMAC an input with an audit device's salt
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                input: { type: string }
+      responses:
+        '200':
+          description: The HMAC.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          hash: { type: string }
+
+  # ------------------------------------------------------------------ Wrapping
+  /sys/wrapping/wrap:
+    post:
+      tags: [Wrapping]
+      operationId: sysWrappingWrap
+      summary: Wrap a payload
+      description: Echoes the posted body. Actual wrapping occurs only when the `X-Vault-Wrap-TTL` header is set, in which case the response carries `wrap_info`.
+      parameters:
+        - $ref: '#/components/parameters/WrapTTL'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: The echoed data, or `wrap_info` when wrapped.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+
+  /sys/wrapping/unwrap:
+    post:
+      tags: [Wrapping]
+      operationId: sysWrappingUnwrap
+      summary: Unwrap a wrapping token (single use)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token: { type: string, description: Wrapping token; defaults to the `X-Vault-Token` header. }
+      responses:
+        '200':
+          description: The originally wrapped payload.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /sys/wrapping/lookup:
+    post:
+      tags: [Wrapping]
+      operationId: sysWrappingLookup
+      summary: Look up wrapping-token metadata
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token: { type: string }
+      responses:
+        '200':
+          description: Wrapping-token metadata.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          creation_time: { type: string, format: date-time }
+                          creation_ttl: { type: integer }
+                          creation_path: { type: string }
+
+  /sys/wrapping/rewrap:
+    post:
+      tags: [Wrapping]
+      operationId: sysWrappingRewrap
+      summary: Rewrap into a fresh wrapping token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token: { type: string }
+      responses:
+        '200':
+          description: New `wrap_info`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+
+  # ------------------------------------------------------------------ Auth / Token
+  /auth/token/create:
+    post:
+      tags: [Auth - Token]
+      operationId: tokenCreate
+      summary: Create a token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                policies: { type: array, items: { type: string } }
+                no_default_policy: { type: boolean }
+                ttl: { type: string, description: Token TTL (duration or seconds). }
+                explicit_max_ttl: { type: string }
+                num_uses: { type: integer }
+                display_name: { type: string }
+                renewable: { type: boolean, default: true }
+      responses:
+        '200':
+          description: The new token, in the `auth` block.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /auth/token/lookup:
+    post:
+      tags: [Auth - Token]
+      operationId: tokenLookup
+      summary: Look up a token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        '200':
+          description: Token info.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenInfoResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /auth/token/lookup-self:
+    get:
+      tags: [Auth - Token]
+      operationId: tokenLookupSelf
+      summary: Look up the caller's own token
+      responses:
+        '200':
+          description: Token info.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenInfoResponse' }
+
+  /auth/token/lookup-accessor:
+    post:
+      tags: [Auth - Token]
+      operationId: tokenLookupAccessor
+      summary: Look up a token by accessor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accessor]
+              properties:
+                accessor: { type: string }
+      responses:
+        '200':
+          description: Token info.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenInfoResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /auth/token/renew:
+    post:
+      tags: [Auth - Token]
+      operationId: tokenRenew
+      summary: Renew a token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+                increment: { type: string }
+      responses:
+        '200':
+          description: Renewed token, in the `auth` block.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /auth/token/renew-self:
+    post:
+      tags: [Auth - Token]
+      operationId: tokenRenewSelf
+      summary: Renew the caller's own token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                increment: { type: string }
+      responses:
+        '200':
+          description: Renewed token, in the `auth` block.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+
+  /auth/token/revoke:
+    post:
+      tags: [Auth - Token]
+      operationId: tokenRevoke
+      summary: Revoke a token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token: { type: string }
+      responses:
+        '204': { description: Revoked. }
+
+  /auth/token/revoke-self:
+    post:
+      tags: [Auth - Token]
+      operationId: tokenRevokeSelf
+      summary: Revoke the caller's own token
+      responses:
+        '204': { description: Revoked. }
+
+  /auth/token/revoke-accessor:
+    post:
+      tags: [Auth - Token]
+      operationId: tokenRevokeAccessor
+      summary: Revoke a token by accessor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accessor]
+              properties:
+                accessor: { type: string }
+      responses:
+        '204': { description: Revoked. }
+
+  # ------------------------------------------------------------------ Auth / Userpass
+  /auth/userpass/users:
+    get:
+      tags: [Auth - Userpass]
+      operationId: userpassListUsers
+      summary: List users
+      parameters:
+        - $ref: '#/components/parameters/List'
+      responses:
+        '200':
+          description: Usernames.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KeyListResponse' }
+
+  /auth/userpass/users/{username}:
+    parameters:
+      - $ref: '#/components/parameters/Username'
+    get:
+      tags: [Auth - Userpass]
+      operationId: userpassReadUser
+      summary: Read a user (never returns the password hash)
+      responses:
+        '200':
+          description: User configuration.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Auth - Userpass]
+      operationId: userpassWriteUser
+      summary: Create or update a user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password: { type: string, description: Required on create. }
+                token_policies: { type: array, items: { type: string } }
+                policies: { type: array, items: { type: string }, description: Alias of `token_policies`. }
+                token_ttl: { type: string }
+                token_max_ttl: { type: string }
+      responses:
+        '204': { description: Written. }
+    delete:
+      tags: [Auth - Userpass]
+      operationId: userpassDeleteUser
+      summary: Delete a user
+      responses:
+        '204': { description: Deleted. }
+
+  /auth/userpass/login/{username}:
+    parameters:
+      - $ref: '#/components/parameters/Username'
+    post:
+      tags: [Auth - Userpass]
+      operationId: userpassLogin
+      summary: Log in with a password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        '200':
+          description: A policy-scoped token, in the `auth` block.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  # ------------------------------------------------------------------ Auth / AppRole
+  /auth/approle/role:
+    get:
+      tags: [Auth - AppRole]
+      operationId: approleListRoles
+      summary: List roles
+      parameters:
+        - $ref: '#/components/parameters/List'
+      responses:
+        '200':
+          description: Role names.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KeyListResponse' }
+
+  /auth/approle/role/{name}:
+    parameters:
+      - $ref: '#/components/parameters/RoleName'
+    get:
+      tags: [Auth - AppRole]
+      operationId: approleReadRole
+      summary: Read a role
+      responses:
+        '200':
+          description: Role configuration.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Auth - AppRole]
+      operationId: approleWriteRole
+      summary: Create or update a role
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token_policies: { type: array, items: { type: string } }
+                policies: { type: array, items: { type: string }, description: Alias of `token_policies`. }
+                role_id: { type: string, description: Auto-generated on create if omitted. }
+                token_ttl: { type: string }
+                secret_id_ttl: { type: string }
+                secret_id_num_uses: { type: integer }
+                bind_secret_id: { type: boolean, default: true }
+      responses:
+        '204': { description: Written. }
+    delete:
+      tags: [Auth - AppRole]
+      operationId: approleDeleteRole
+      summary: Delete a role
+      responses:
+        '204': { description: Deleted. }
+
+  /auth/approle/role/{name}/role-id:
+    parameters:
+      - $ref: '#/components/parameters/RoleName'
+    get:
+      tags: [Auth - AppRole]
+      operationId: approleReadRoleID
+      summary: Read a role's role_id
+      responses:
+        '200':
+          description: The role_id.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+    post:
+      tags: [Auth - AppRole]
+      operationId: approleWriteRoleID
+      summary: Set a role's role_id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role_id]
+              properties:
+                role_id: { type: string }
+      responses:
+        '204': { description: Written. }
+
+  /auth/approle/role/{name}/secret-id:
+    parameters:
+      - $ref: '#/components/parameters/RoleName'
+    post:
+      tags: [Auth - AppRole]
+      operationId: approleGenerateSecretID
+      summary: Generate a secret_id
+      responses:
+        '200':
+          description: The generated secret_id and its accessor.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          secret_id: { type: string }
+                          secret_id_accessor: { type: string }
+                          secret_id_ttl: { type: integer }
+                          secret_id_num_uses: { type: integer }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /auth/approle/login:
+    post:
+      tags: [Auth - AppRole]
+      operationId: approleLogin
+      summary: Log in with role_id / secret_id
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role_id]
+              properties:
+                role_id: { type: string }
+                secret_id: { type: string, description: Required when the role binds secret_id. }
+      responses:
+        '200':
+          description: A token, in the `auth` block.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  # ------------------------------------------------------------------ Auth / Cert
+  /auth/cert/certs:
+    get:
+      tags: [Auth - Cert]
+      operationId: certListCerts
+      summary: List trusted certificates
+      parameters:
+        - $ref: '#/components/parameters/List'
+      responses:
+        '200':
+          description: Certificate names.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KeyListResponse' }
+
+  /auth/cert/certs/{name}:
+    parameters:
+      - $ref: '#/components/parameters/CertName'
+    get:
+      tags: [Auth - Cert]
+      operationId: certReadCert
+      summary: Read a trusted certificate
+      responses:
+        '200':
+          description: Certificate configuration.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Auth - Cert]
+      operationId: certWriteCert
+      summary: Register a trusted certificate or CA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [certificate]
+              properties:
+                certificate: { type: string, description: PEM-encoded x509 certificate or CA. }
+                policies: { type: array, items: { type: string } }
+                display_name: { type: string }
+                token_ttl: { type: string }
+      responses:
+        '204': { description: Written. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      tags: [Auth - Cert]
+      operationId: certDeleteCert
+      summary: Delete a trusted certificate
+      responses:
+        '204': { description: Deleted. }
+
+  /auth/cert/login:
+    post:
+      tags: [Auth - Cert]
+      operationId: certLogin
+      summary: Log in with a TLS client certificate
+      description: Requires a TLS client certificate on the connection. No body fields; matching is by the presented certificate.
+      security: []
+      responses:
+        '200':
+          description: A token, in the `auth` block.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  # ------------------------------------------------------------------ Secrets / KV v1
+  /secret/{path}:
+    parameters:
+      - $ref: '#/components/parameters/SecretPath'
+    get:
+      tags: [Secrets - KV v1]
+      operationId: kvRead
+      summary: Read a secret (or list with ?list=true)
+      description: Reads the secret at `{path}`. With `?list=true`, lists keys under `{path}` instead.
+      parameters:
+        - $ref: '#/components/parameters/List'
+      responses:
+        '200':
+          description: The stored key/value object (or a key list).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Secrets - KV v1]
+      operationId: kvWrite
+      summary: Write a secret
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              example: { username: admin, password: s3cr3t }
+      responses:
+        '204': { description: Written. }
+    delete:
+      tags: [Secrets - KV v1]
+      operationId: kvDelete
+      summary: Delete a secret
+      responses:
+        '204': { description: Deleted. }
+
+  # ------------------------------------------------------------------ Secrets / KV v2
+  /secret/config:
+    get:
+      tags: [Secrets - KV v2]
+      operationId: kv2ReadConfig
+      summary: Read the engine config
+      responses:
+        '200':
+          description: Engine configuration.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          max_versions: { type: integer }
+                          cas_required: { type: boolean }
+                          delete_version_after: { type: string }
+    post:
+      tags: [Secrets - KV v2]
+      operationId: kv2WriteConfig
+      summary: Update the engine config
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                max_versions: { type: integer }
+                cas_required: { type: boolean }
+                delete_version_after: { type: string }
+      responses:
+        '204': { description: Written. }
+
+  /secret/data/{path}:
+    parameters:
+      - $ref: '#/components/parameters/SecretPath'
+    get:
+      tags: [Secrets - KV v2]
+      operationId: kv2ReadData
+      summary: Read a secret version
+      parameters:
+        - name: version
+          in: query
+          schema: { type: integer }
+          description: Version to read (default latest).
+      responses:
+        '200':
+          description: The secret data plus version metadata.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          data:
+                            type: object
+                            nullable: true
+                            additionalProperties: true
+                          metadata: { $ref: '#/components/schemas/KVv2VersionMeta' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Secrets - KV v2]
+      operationId: kv2WriteData
+      summary: Write a new secret version
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: object
+                  additionalProperties: true
+                  example: { username: admin, password: s3cr3t }
+                options:
+                  type: object
+                  properties:
+                    cas: { type: integer, description: Check-and-set — write only if the current version matches. }
+      responses:
+        '200':
+          description: The new version's metadata.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/KVv2VersionMeta' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      tags: [Secrets - KV v2]
+      operationId: kv2DeleteLatest
+      summary: Soft-delete the latest version
+      responses:
+        '204': { description: Deleted. }
+
+  /secret/metadata/{path}:
+    parameters:
+      - $ref: '#/components/parameters/SecretPath'
+    get:
+      tags: [Secrets - KV v2]
+      operationId: kv2ReadMetadata
+      summary: Read secret metadata (or list with ?list=true)
+      parameters:
+        - $ref: '#/components/parameters/List'
+      responses:
+        '200':
+          description: Metadata across all versions (or a key list).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          current_version: { type: integer }
+                          oldest_version: { type: integer }
+                          created_time: { type: string }
+                          updated_time: { type: string }
+                          max_versions: { type: integer }
+                          cas_required: { type: boolean }
+                          custom_metadata: { type: object, additionalProperties: true }
+                          versions: { type: object, additionalProperties: true }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Secrets - KV v2]
+      operationId: kv2WriteMetadata
+      summary: Update secret metadata
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                max_versions: { type: integer }
+                cas_required: { type: boolean }
+                custom_metadata: { type: object, additionalProperties: { type: string } }
+      responses:
+        '204': { description: Written. }
+    delete:
+      tags: [Secrets - KV v2]
+      operationId: kv2DeleteMetadata
+      summary: Purge all versions and metadata
+      responses:
+        '204': { description: Purged. }
+
+  /secret/delete/{path}:
+    parameters:
+      - $ref: '#/components/parameters/SecretPath'
+    post:
+      tags: [Secrets - KV v2]
+      operationId: kv2DeleteVersions
+      summary: Soft-delete specific versions
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VersionList' }
+      responses:
+        '204': { description: Deleted. }
+
+  /secret/undelete/{path}:
+    parameters:
+      - $ref: '#/components/parameters/SecretPath'
+    post:
+      tags: [Secrets - KV v2]
+      operationId: kv2UndeleteVersions
+      summary: Restore soft-deleted versions
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VersionList' }
+      responses:
+        '204': { description: Restored. }
+
+  /secret/destroy/{path}:
+    parameters:
+      - $ref: '#/components/parameters/SecretPath'
+    post:
+      tags: [Secrets - KV v2]
+      operationId: kv2DestroyVersions
+      summary: Permanently destroy versions' data
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VersionList' }
+      responses:
+        '204': { description: Destroyed. }
+
+  # ------------------------------------------------------------------ Secrets / Transit
+  /transit/keys:
+    get:
+      tags: [Secrets - Transit]
+      operationId: transitListKeys
+      summary: List keys
+      parameters:
+        - $ref: '#/components/parameters/List'
+      responses:
+        '200':
+          description: Key names.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KeyListResponse' }
+
+  /transit/keys/{name}:
+    parameters:
+      - $ref: '#/components/parameters/KeyName'
+    get:
+      tags: [Secrets - Transit]
+      operationId: transitReadKey
+      summary: Read a key
+      responses:
+        '200':
+          description: Key information (public key material for asymmetric keys).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TransitKey' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Secrets - Transit]
+      operationId: transitCreateKey
+      summary: Create a key
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [aes256-gcm96, chacha20-poly1305, ed25519, ecdsa-p256]
+                  default: aes256-gcm96
+      responses:
+        '200':
+          description: The created key's information.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TransitKey' }
+    delete:
+      tags: [Secrets - Transit]
+      operationId: transitDeleteKey
+      summary: Delete a key (requires deletion_allowed)
+      responses:
+        '204': { description: Deleted. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /transit/keys/{name}/rotate:
+    parameters:
+      - $ref: '#/components/parameters/KeyName'
+    post:
+      tags: [Secrets - Transit]
+      operationId: transitRotateKey
+      summary: Rotate a key (add a new version)
+      responses:
+        '200':
+          description: The rotated key's information.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TransitKey' }
+
+  /transit/keys/{name}/config:
+    parameters:
+      - $ref: '#/components/parameters/KeyName'
+    post:
+      tags: [Secrets - Transit]
+      operationId: transitConfigKey
+      summary: Tune a key
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                min_decryption_version: { type: integer }
+                min_encryption_version: { type: integer }
+                deletion_allowed: { type: boolean }
+      responses:
+        '204': { description: Tuned. }
+
+  /transit/encrypt/{name}:
+    parameters:
+      - $ref: '#/components/parameters/KeyName'
+    post:
+      tags: [Secrets - Transit]
+      operationId: transitEncrypt
+      summary: Encrypt plaintext (symmetric keys)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plaintext]
+              properties:
+                plaintext: { type: string, description: Base64-encoded plaintext. }
+                key_version: { type: integer }
+      responses:
+        '200':
+          description: The ciphertext.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          ciphertext: { type: string, example: 'vault:v1:...' }
+                          key_version: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /transit/decrypt/{name}:
+    parameters:
+      - $ref: '#/components/parameters/KeyName'
+    post:
+      tags: [Secrets - Transit]
+      operationId: transitDecrypt
+      summary: Decrypt ciphertext
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ciphertext]
+              properties:
+                ciphertext: { type: string, example: 'vault:v1:...' }
+      responses:
+        '200':
+          description: The plaintext.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          plaintext: { type: string, description: Base64-encoded plaintext. }
+
+  /transit/rewrap/{name}:
+    parameters:
+      - $ref: '#/components/parameters/KeyName'
+    post:
+      tags: [Secrets - Transit]
+      operationId: transitRewrap
+      summary: Re-encrypt ciphertext to the latest key version
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ciphertext]
+              properties:
+                ciphertext: { type: string }
+      responses:
+        '200':
+          description: The re-wrapped ciphertext.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          ciphertext: { type: string }
+                          key_version: { type: integer }
+
+  /transit/sign/{name}:
+    parameters:
+      - $ref: '#/components/parameters/KeyName'
+    post:
+      tags: [Secrets - Transit]
+      operationId: transitSign
+      summary: Sign input (asymmetric keys)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [input]
+              properties:
+                input: { type: string, description: Base64-encoded input. }
+      responses:
+        '200':
+          description: The signature.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          signature: { type: string, example: 'vault:v1:...' }
+                          key_version: { type: integer }
+
+  /transit/verify/{name}:
+    parameters:
+      - $ref: '#/components/parameters/KeyName'
+    post:
+      tags: [Secrets - Transit]
+      operationId: transitVerify
+      summary: Verify a signature or HMAC
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [input]
+              properties:
+                input: { type: string, description: Base64-encoded input. }
+                signature: { type: string, description: Signature to verify (asymmetric). }
+                hmac: { type: string, description: HMAC to verify. }
+      responses:
+        '200':
+          description: Validity.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          valid: { type: boolean }
+
+  /transit/hmac/{name}:
+    parameters:
+      - $ref: '#/components/parameters/KeyName'
+    post:
+      tags: [Secrets - Transit]
+      operationId: transitHMAC
+      summary: Generate an HMAC
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [input]
+              properties:
+                input: { type: string, description: Base64-encoded input. }
+      responses:
+        '200':
+          description: The HMAC.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          hmac: { type: string, example: 'vault:v1:...' }
+                          key_version: { type: integer }
+
+  /transit/datakey/{mode}/{name}:
+    parameters:
+      - name: mode
+        in: path
+        required: true
+        schema: { type: string, enum: [plaintext, wrapped] }
+        description: '`plaintext` also returns the raw data key; `wrapped` returns only the wrapped form.'
+      - $ref: '#/components/parameters/KeyName'
+    post:
+      tags: [Secrets - Transit]
+      operationId: transitDatakey
+      summary: Generate a data key wrapped by a key
+      responses:
+        '200':
+          description: The wrapped data key (and plaintext in `plaintext` mode).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          ciphertext: { type: string }
+                          plaintext: { type: string, description: Base64 data key (only in `plaintext` mode). }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  # ------------------------------------------------------------------ Secrets / Cubbyhole
+  /cubbyhole/{path}:
+    parameters:
+      - $ref: '#/components/parameters/SecretPath'
+    get:
+      tags: [Secrets - Cubbyhole]
+      operationId: cubbyholeRead
+      summary: Read from the cubbyhole (or list with ?list=true)
+      parameters:
+        - $ref: '#/components/parameters/List'
+      responses:
+        '200':
+          description: The stored object (or a key list).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Secrets - Cubbyhole]
+      operationId: cubbyholeWrite
+      summary: Write to the cubbyhole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '204': { description: Written. }
+    delete:
+      tags: [Secrets - Cubbyhole]
+      operationId: cubbyholeDelete
+      summary: Delete from the cubbyhole
+      responses:
+        '204': { description: Deleted. }
+
+  # ------------------------------------------------------------------ Secrets / TOTP
+  /totp/keys:
+    get:
+      tags: [Secrets - TOTP]
+      operationId: totpListKeys
+      summary: List keys
+      parameters:
+        - $ref: '#/components/parameters/List'
+      responses:
+        '200':
+          description: Key names.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KeyListResponse' }
+
+  /totp/keys/{name}:
+    parameters:
+      - $ref: '#/components/parameters/KeyName'
+    get:
+      tags: [Secrets - TOTP]
+      operationId: totpReadKey
+      summary: Read a key (the shared secret is never exposed)
+      responses:
+        '200':
+          description: Key configuration.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          account_name: { type: string }
+                          algorithm: { type: string }
+                          digits: { type: integer }
+                          period: { type: integer }
+                          issuer: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Secrets - TOTP]
+      operationId: totpWriteKey
+      summary: Create a key
+      description: "Provide `generate: true` to have the server create the secret (returns an `otpauth://` URL), or supply an existing base32 `key`."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                generate: { type: boolean, description: Server-generate the secret. }
+                key: { type: string, description: Base32-encoded shared secret (when not generating). }
+                algorithm: { type: string, enum: [SHA1, SHA256, SHA512], default: SHA1 }
+                digits: { type: integer, enum: [6, 8], default: 6 }
+                period: { type: integer, default: 30 }
+                issuer: { type: string }
+                account_name: { type: string }
+      responses:
+        '200':
+          description: 'When `generate: true`: the provisioning URL.'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          url: { type: string, example: 'otpauth://totp/...' }
+                          barcode: { type: string }
+        '204': { description: Created from a supplied `key`. }
+    delete:
+      tags: [Secrets - TOTP]
+      operationId: totpDeleteKey
+      summary: Delete a key
+      responses:
+        '204': { description: Deleted. }
+
+  /totp/code/{name}:
+    parameters:
+      - $ref: '#/components/parameters/KeyName'
+    get:
+      tags: [Secrets - TOTP]
+      operationId: totpGenerateCode
+      summary: Generate the current code
+      responses:
+        '200':
+          description: The current TOTP code.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          code: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Secrets - TOTP]
+      operationId: totpValidateCode
+      summary: Validate a code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code: { type: string }
+      responses:
+        '200':
+          description: Validity (±1 step skew).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          valid: { type: boolean }
+
+  # ------------------------------------------------------------------ Identity
+  /identity/entity:
+    get:
+      tags: [Identity]
+      operationId: identityListEntities
+      summary: List entity IDs
+      parameters:
+        - $ref: '#/components/parameters/List'
+      responses:
+        '200':
+          description: Entity IDs.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KeyListResponse' }
+    post:
+      tags: [Identity]
+      operationId: identityWriteEntity
+      summary: Create or update an entity by name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                policies: { type: array, items: { type: string } }
+                metadata: { type: object, additionalProperties: { type: string } }
+                disabled: { type: boolean }
+      responses:
+        '200':
+          description: The entity's id and name.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+
+  /identity/entity/id/{id}:
+    parameters:
+      - $ref: '#/components/parameters/EntityID'
+    get:
+      tags: [Identity]
+      operationId: identityReadEntityByID
+      summary: Read an entity by ID
+      responses:
+        '200':
+          description: Entity.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Identity]
+      operationId: identityDeleteEntity
+      summary: Delete an entity by ID
+      responses:
+        '204': { description: Deleted. }
+
+  /identity/entity/name/{name}:
+    parameters:
+      - $ref: '#/components/parameters/EntityName'
+    get:
+      tags: [Identity]
+      operationId: identityReadEntityByName
+      summary: Read an entity by name
+      responses:
+        '200':
+          description: Entity.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /identity/entity-alias:
+    post:
+      tags: [Identity]
+      operationId: identityWriteEntityAlias
+      summary: Create an entity alias
+      description: Links a login (mount accessor + name) to a canonical entity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, canonical_id, mount_accessor]
+              properties:
+                name: { type: string }
+                canonical_id: { type: string, description: The target entity ID. }
+                mount_accessor: { type: string }
+      responses:
+        '200':
+          description: The alias id and canonical_id.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+
+  /identity/group:
+    get:
+      tags: [Identity]
+      operationId: identityListGroups
+      summary: List group IDs
+      parameters:
+        - $ref: '#/components/parameters/List'
+      responses:
+        '200':
+          description: Group IDs.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KeyListResponse' }
+    post:
+      tags: [Identity]
+      operationId: identityWriteGroup
+      summary: Create or update a group by name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                policies: { type: array, items: { type: string } }
+                member_entity_ids: { type: array, items: { type: string } }
+      responses:
+        '200':
+          description: The group's id and name.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+
+  /identity/group/id/{id}:
+    parameters:
+      - $ref: '#/components/parameters/GroupID'
+    get:
+      tags: [Identity]
+      operationId: identityReadGroupByID
+      summary: Read a group by ID
+      responses:
+        '200':
+          description: Group.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Identity]
+      operationId: identityDeleteGroup
+      summary: Delete a group by ID
+      responses:
+        '204': { description: Deleted. }
+
+  /identity/group/name/{name}:
+    parameters:
+      - $ref: '#/components/parameters/GroupName'
+    get:
+      tags: [Identity]
+      operationId: identityReadGroupByName
+      summary: Read a group by name
+      responses:
+        '200':
+          description: Group.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    VaultToken:
+      type: apiKey
+      in: header
+      name: X-Vault-Token
+      description: A keephippo/Vault token. Obtain one from `sys/init` (root token) or an auth-method login.
+
+  parameters:
+    List:
+      name: list
+      in: query
+      required: false
+      schema: { type: boolean, enum: [true] }
+      description: Set to `true` to list keys under the path instead of reading it.
+    WrapTTL:
+      name: X-Vault-Wrap-TTL
+      in: header
+      required: false
+      schema: { type: string }
+      description: When set (duration or seconds), the response is wrapped in a single-use token and returned as `wrap_info`.
+    MountPath:
+      name: path
+      in: path
+      required: true
+      schema: { type: string }
+      description: Mount path (a trailing slash is implied), e.g. `secret` or `transit`.
+    AuthPath:
+      name: path
+      in: path
+      required: true
+      schema: { type: string }
+      description: Auth-method mount path, e.g. `userpass`.
+    AuditPath:
+      name: path
+      in: path
+      required: true
+      schema: { type: string }
+      description: Audit device path.
+    PolicyName:
+      name: name
+      in: path
+      required: true
+      schema: { type: string }
+    LeasePrefix:
+      name: prefix
+      in: path
+      required: true
+      schema: { type: string }
+      description: Lease-ID prefix (may contain slashes).
+    Username:
+      name: username
+      in: path
+      required: true
+      schema: { type: string }
+    RoleName:
+      name: name
+      in: path
+      required: true
+      schema: { type: string }
+    CertName:
+      name: name
+      in: path
+      required: true
+      schema: { type: string }
+    SecretPath:
+      name: path
+      in: path
+      required: true
+      schema: { type: string }
+      description: An arbitrary secret path (may contain slashes).
+    KeyName:
+      name: name
+      in: path
+      required: true
+      schema: { type: string }
+    EntityID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    EntityName:
+      name: name
+      in: path
+      required: true
+      schema: { type: string }
+    GroupID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    GroupName:
+      name: name
+      in: path
+      required: true
+      schema: { type: string }
+
+  responses:
+    NotFound:
+      description: Not found.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    BadRequest:
+      description: Invalid request.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Permission denied (missing token, failed ACL check, or sudo required).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        errors:
+          type: array
+          items: { type: string }
+      example: { errors: ["permission denied"] }
+
+    Envelope:
+      type: object
+      description: The standard Vault-compatible response envelope. Endpoint-specific fields live in `data` (or `auth`).
+      properties:
+        request_id: { type: string }
+        lease_id: { type: string }
+        renewable: { type: boolean }
+        lease_duration: { type: integer }
+        data:
+          type: object
+          nullable: true
+          additionalProperties: true
+        wrap_info: { type: object, nullable: true }
+        warnings: { type: array, nullable: true, items: { type: string } }
+        auth: { type: object, nullable: true }
+
+    KeyListResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                keys:
+                  type: array
+                  items: { type: string }
+
+    AuthResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            auth: { $ref: '#/components/schemas/Auth' }
+
+    Auth:
+      type: object
+      description: The authentication block returned by logins and token creation.
+      properties:
+        client_token: { type: string }
+        accessor: { type: string }
+        policies: { type: array, items: { type: string } }
+        token_policies: { type: array, items: { type: string } }
+        lease_duration: { type: integer }
+        renewable: { type: boolean }
+        display_name: { type: string }
+        metadata: { type: object, additionalProperties: { type: string }, nullable: true }
+
+    TokenInfoResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/TokenInfo' }
+
+    TokenInfo:
+      type: object
+      properties:
+        id: { type: string }
+        accessor: { type: string }
+        policies: { type: array, items: { type: string } }
+        ttl: { type: integer, description: Remaining TTL in seconds. }
+        num_uses: { type: integer }
+        creation_time: { type: integer, format: int64 }
+        expire_time: { type: integer, format: int64 }
+        explicit_max_ttl: { type: integer, format: int64 }
+        display_name: { type: string }
+        renewable: { type: boolean }
+        entity_id: { type: string }
+
+    MountInfo:
+      type: object
+      properties:
+        path: { type: string }
+        type: { type: string }
+        description: { type: string }
+        accessor: { type: string }
+        uuid: { type: string }
+        options: { type: object, additionalProperties: true, nullable: true }
+        local: { type: boolean }
+
+    KVv2VersionMeta:
+      type: object
+      properties:
+        version: { type: integer }
+        created_time: { type: string }
+        deletion_time: { type: string }
+        destroyed: { type: boolean }
+        custom_metadata: { type: object, additionalProperties: true, nullable: true }
+
+    VersionList:
+      type: object
+      properties:
+        versions:
+          type: array
+          items: { type: integer }
+          description: Version numbers to act on (defaults to the current version).
+
+    Health:
+      type: object
+      properties:
+        initialized: { type: boolean }
+        sealed: { type: boolean }
+        standby: { type: boolean }
+        server_time_utc: { type: integer, format: int64 }
+        version: { type: string }
+
+    SealStatus:
+      type: object
+      properties:
+        type: { type: string, example: shamir }
+        initialized: { type: boolean }
+        sealed: { type: boolean }
+        t: { type: integer, description: Unseal threshold. }
+        n: { type: integer, description: Number of key shares. }
+        progress: { type: integer, description: Shares submitted so far. }
+        version: { type: string }
+        storage_type: { type: string }
+
+    TransitKey:
+      type: object
+      properties:
+        name: { type: string }
+        type: { type: string }
+        latest_version: { type: integer }
+        min_decryption_version: { type: integer }
+        min_encryption_version: { type: integer }
+        deletion_allowed: { type: boolean }
+        supports_encryption: { type: boolean }
+        supports_decryption: { type: boolean }
+        supports_signing: { type: boolean }
+        keys:
+          type: object
+          additionalProperties: true
+          description: Per-version info — a created_time for symmetric keys, or `{ creation_time, public_key }` for asymmetric keys.

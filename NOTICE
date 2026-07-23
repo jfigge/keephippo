@@ -29,6 +29,14 @@ Current:
   - github.com/spf13/pflag                BSD-3-Clause
   - github.com/inconshreveable/mousetrap  Apache-2.0
 
+Vendored browser assets (embedded in the binary, served at /swagger):
+  - swagger-ui (swagger-api/swagger-ui)   Apache-2.0
+    Copyright 2020-2021 SmartBear Software Inc. Only the prebuilt
+    swagger-ui.css and swagger-ui-bundle.js distribution files are vendored,
+    under src/web/swagger/; the upstream LICENSE and NOTICE are kept alongside
+    them. keephippo's own OpenAPI description lives in
+    src/web/swagger/openapi.yaml.
+
 Planned MPL-2.0 framework dependencies (each retains its own license/copyright,
 reproduced with the dependency in the Go module cache and in binary credits):
   - github.com/openbao/openbao/sdk        MPL-2.0

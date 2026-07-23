@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>keephippo API — Swagger UI</title>
+    <link rel="stylesheet" type="text/css" href="./swagger-ui.css" />
+    <link rel="icon" type="image/png" href="/favicon.ico" />
+    <style>
+      body {
+        margin: 0;
+        background: #fafafa;
+      }
+      /* Hide the default top bar; the spec is served locally, not from a URL box. */
+      .swagger-ui .topbar {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="./swagger-ui-bundle.js" charset="UTF-8"></script>
+    <script>
+      window.onload = function () {
+        window.ui = SwaggerUIBundle({
+          url: "./openapi.yaml",
+          dom_id: "#swagger-ui",
+          deepLinking: true,
+          presets: [SwaggerUIBundle.presets.apis],
+          layout: "BaseLayout",
+          defaultModelsExpandDepth: 0,
+          docExpansion: "list",
+          tryItOutEnabled: true,
+        });
+      };
+    </script>
+  </body>
+</html>

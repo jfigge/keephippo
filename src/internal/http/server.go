@@ -55,6 +55,11 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("GET /ui", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/ui/", http.StatusFound)
 		})
+		swaggerServer := http.StripPrefix("/swagger", http.FileServer(http.FS(web.Swagger())))
+		mux.Handle("GET /swagger/", swaggerServer)
+		mux.HandleFunc("GET /swagger", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/swagger/", http.StatusFound)
+		})
 		mux.HandleFunc("GET /favicon.ico", s.handleFavicon)
 		mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/ui/", http.StatusFound)

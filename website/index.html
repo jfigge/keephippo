@@ -18,12 +18,29 @@
   <link rel="stylesheet" href="/site.css">
 </head>
 <body>
+  <!-- Pre-release notice -->
+  <div class="prerelease-banner" role="alert">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+    <span><strong>Pre-release:</strong> keephippo is still in active development and has not been security-audited. User discretion is advised.</span>
+  </div>
+
   <header class="site"><div class="wrap bar">
     <a class="brand" href="/"><img src="/icons/64x64.png" alt=""> keephippo</a>
     <nav>
       <a href="/features.html">Features</a>
       <a href="/docs/">Docs</a>
-      <a href="/downloads.html">Downloads</a>
+      <details class="nav-dd">
+        <summary class="nav-dd-summary">Other Hippos
+          <svg class="nav-dd-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="nav-dd-menu">
+          <a class="nav-dd-item" href="https://chiphippo.com" rel="noopener noreferrer"><svg width="16" height="16" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="114" fill="#2F855A"/><circle cx="170" cy="146" r="40" fill="#fff"/><circle cx="342" cy="146" r="40" fill="#fff"/><rect x="144" y="140" width="224" height="190" rx="74" fill="#fff"/><rect x="118" y="260" width="276" height="150" rx="74" fill="#fff"/><circle cx="201" cy="198" r="17" fill="#1C1C1C"/><circle cx="311" cy="198" r="17" fill="#1C1C1C"/><rect x="186" y="320" width="140" height="52" rx="8" fill="#23272B"/><circle cx="186" cy="346" r="11" fill="#fff"/></svg>Chip Hippo</a>
+          <a class="nav-dd-item" href="https://resthippo.com" rel="noopener noreferrer"><svg width="16" height="16" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="114" fill="#6C5CE7"/><circle cx="170" cy="146" r="40" fill="#fff"/><circle cx="342" cy="146" r="40" fill="#fff"/><rect x="144" y="140" width="224" height="190" rx="74" fill="#fff"/><rect x="118" y="260" width="276" height="150" rx="74" fill="#fff"/><circle cx="201" cy="198" r="17" fill="#6C5CE7"/><circle cx="311" cy="198" r="17" fill="#6C5CE7"/><ellipse cx="210" cy="330" rx="14" ry="20" fill="#6C5CE7"/><ellipse cx="302" cy="330" rx="14" ry="20" fill="#6C5CE7"/></svg>Rest Hippo</a>
+          <a class="nav-dd-item" href="https://jumphippo.com" rel="noopener noreferrer"><svg width="16" height="16" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="114" fill="#4785F0"/><circle cx="170" cy="146" r="40" fill="#fff"/><circle cx="342" cy="146" r="40" fill="#fff"/><rect x="144" y="140" width="224" height="190" rx="74" fill="#fff"/><rect x="118" y="260" width="276" height="150" rx="74" fill="#fff"/><circle cx="201" cy="198" r="17" fill="#1C1C1C"/><circle cx="311" cy="198" r="17" fill="#1C1C1C"/><line x1="210" y1="332" x2="302" y2="332" stroke="#4785F0" stroke-width="13" stroke-linecap="round"/><ellipse cx="210" cy="332" rx="18" ry="23" fill="#1C1C1C"/><ellipse cx="302" cy="332" rx="18" ry="23" fill="#1C1C1C"/></svg>Jump Hippo</a>
+        </div>
+      </details>
       <a href="/vs-vault.html" class="hide-sm">vs. Vault</a>
       <a href="https://github.com/jfigge/keephippo">GitHub</a>
       <a href="https://github.com/sponsors/jfigge" class="btn ghost">Sponsor</a>

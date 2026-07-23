@@ -103,12 +103,54 @@ func TestUIServedWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestSwaggerServedWhenEnabled(t *testing.T) {
+	url := newUIServer(t, true)
+	hc := noRedirectClient()
+
+	// The Swagger UI host page loads and references the bundle + the spec.
+	resp, body := get(t, hc, url+"/swagger/")
+	if resp.StatusCode != 200 {
+		t.Fatalf("/swagger/ status = %d", resp.StatusCode)
+	}
+	for _, want := range []string{"swagger-ui", "swagger-ui-bundle.js", "openapi.yaml"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("/swagger/ page missing %q", want)
+		}
+	}
+
+	// The OpenAPI spec is embedded and served.
+	resp, spec := get(t, hc, url+"/swagger/openapi.yaml")
+	if resp.StatusCode != 200 {
+		t.Fatalf("/swagger/openapi.yaml status = %d", resp.StatusCode)
+	}
+	for _, want := range []string{"openapi:", "/sys/health", "/auth/userpass/login/{username}"} {
+		if !strings.Contains(spec, want) {
+			t.Fatalf("openapi.yaml missing %q", want)
+		}
+	}
+
+	// The Swagger UI JavaScript bundle is served as JavaScript.
+	resp, _ = get(t, hc, url+"/swagger/swagger-ui-bundle.js")
+	if resp.StatusCode != 200 || !strings.Contains(resp.Header.Get("Content-Type"), "javascript") {
+		t.Fatalf("swagger-ui-bundle.js status=%d ct=%q", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+
+	// "/swagger" redirects to the trailing-slash form.
+	resp, _ = get(t, hc, url+"/swagger")
+	if resp.StatusCode != http.StatusFound || resp.Header.Get("Location") != "/swagger/" {
+		t.Fatalf("/swagger: status=%d location=%q; want 302 -> /swagger/", resp.StatusCode, resp.Header.Get("Location"))
+	}
+}
+
 func TestUINotServedWhenDisabled(t *testing.T) {
 	url := newUIServer(t, false)
 	hc := noRedirectClient()
 
 	if resp, _ := get(t, hc, url+"/ui/"); resp.StatusCode != 404 {
 		t.Fatalf("/ui/ with ui=false status = %d; want 404", resp.StatusCode)
+	}
+	if resp, _ := get(t, hc, url+"/swagger/"); resp.StatusCode != 404 {
+		t.Fatalf("/swagger/ with ui=false status = %d; want 404", resp.StatusCode)
 	}
 	if resp, _ := get(t, hc, url+"/favicon.ico"); resp.StatusCode != 404 {
 		t.Fatalf("/favicon.ico with ui=false status = %d; want 404", resp.StatusCode)

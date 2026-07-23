@@ -70,7 +70,8 @@ func runDevServer(cmd *cobra.Command) error {
 	fmt.Fprintf(w, "export KEEPHIPPO_TOKEN=%s\n", res.RootToken)
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "Web console:  http://%s/ui\n", defaultListenAddr)
-	fmt.Fprintf(w, "Listening on http://%s\n", defaultListenAddr)
+	fmt.Fprintf(w, "Swagger docs: http://%s/swagger\n", defaultListenAddr)
+	fmt.Fprintf(w, "Listening on: http://%s\n", defaultListenAddr)
 	return serve(cmd, defaultListenAddr, c, true)
 }
 

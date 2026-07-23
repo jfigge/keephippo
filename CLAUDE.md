@@ -8,7 +8,8 @@ Guidance for Claude Code (and other agents) working in this repository.
 server plus a console application (CLI). It replicates HashiCorp Vault's HTTP API
 and core features (secrets engines, auth methods, policies, tokens, leases,
 seal/unseal) so existing Vault clients keep working, while shipping its own
-console app and branding. It also embeds a web console at `/ui`.
+console app and branding. It also embeds a web console at `/ui` and interactive
+API docs (Swagger UI) at `/swagger`.
 
 > ⚠️ Educational / portfolio project. **Not security-audited.** Correctness and
 > provenance matter more than usual here — this is a secrets manager.
@@ -59,6 +60,13 @@ Secrets-handling code needs **unit and e2e** coverage.
 - **Wire compatibility** with Vault: `/v1/` paths, `X-Vault-Token` header, port
   `8200`, `VAULT_ADDR`/`VAULT_TOKEN` env (also `KEEPHIPPO_ADDR`/`KEEPHIPPO_TOKEN`),
   standard JSON response envelope. Don't break these.
+- **Keep the OpenAPI spec current.** The `/v1/*` HTTP API is described by
+  `src/web/swagger/openapi.yaml` (OpenAPI 3.0), embedded and served as Swagger UI
+  at `/swagger`. **Whenever you add, remove, or change any endpoint — a path, a
+  method, a request field, or a response shape — update `openapi.yaml` in the
+  same change**, and mirror endpoint-level additions in `docs/API_COMPAT.md`. The
+  Swagger UI bundle under `src/web/swagger/` is vendored third-party (Apache-2.0,
+  recorded in `NOTICE`); don't hand-edit it — only `openapi.yaml` is ours.
 - Work on feature branches; open PRs against `main`.
 
 ## Git & committing

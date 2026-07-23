@@ -33,6 +33,23 @@ code, pre { font-family: var(--mono); }
 .muted { color: var(--muted); }
 .center { text-align: center; }
 
+/* pre-release banner */
+.prerelease-banner {
+  background: #2a1f12;
+  border-bottom: 1px solid #4a3a1c;
+  color: var(--text);
+  padding: 9px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+.prerelease-banner svg { flex-shrink: 0; color: #ffcf87; }
+.prerelease-banner strong { color: #ffcf87; font-weight: 700; }
+
 /* header */
 header.site {
   position: sticky; top: 0; z-index: 20;
@@ -53,6 +70,35 @@ header.site nav a:hover { color: var(--text); text-decoration: none; }
 .btn:hover { filter: brightness(1.08); text-decoration: none; }
 .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
 .btn.ghost:hover { border-color: var(--accent); }
+
+/* Other-Hippos dropdown (native <details>, no JS) */
+.nav-dd { position: relative; }
+.nav-dd-summary {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--muted); font-weight: 600; font-size: 15px;
+  cursor: pointer; list-style: none; user-select: none;
+}
+.nav-dd-summary::-webkit-details-marker { display: none; }
+.nav-dd-summary::marker { content: ""; }
+.nav-dd-summary:hover { color: var(--text); }
+.nav-dd[open] .nav-dd-summary { color: var(--text); }
+.nav-dd-chevron { transition: transform .15s; }
+.nav-dd[open] .nav-dd-chevron { transform: rotate(180deg); }
+.nav-dd-menu {
+  position: absolute; top: calc(100% + 14px); left: 0;
+  min-width: 176px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 6px;
+  display: flex; flex-direction: column; gap: 2px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .5); z-index: 30;
+}
+.nav-dd-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 7px;
+  color: var(--muted); font-weight: 600; font-size: 14px; white-space: nowrap;
+}
+.nav-dd-item:hover { background: var(--panel-2); color: var(--text); text-decoration: none; }
+.nav-dd-item svg { flex-shrink: 0; }
 
 /* hero */
 .hero { padding: 84px 0 40px; text-align: center; }
@@ -118,4 +164,5 @@ footer.site .fine { margin-top: 24px; font-size: 13px; }
 
 @media (max-width: 640px) {
   header.site nav a.hide-sm { display: none; }
+  .prerelease-banner { padding: 9px 14px; font-size: 12px; }
 }
