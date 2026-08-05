@@ -6,7 +6,7 @@ toolchain go1.26.5
 
 require (
 	github.com/hashicorp/hcl/v2 v2.24.0
-	github.com/openbao/openbao/sdk/v2 v2.6.0
+	github.com/openbao/openbao/sdk/v2 v2.6.2
 	github.com/spf13/cobra v1.10.2
 	go.etcd.io/bbolt v1.5.0
 	golang.org/x/crypto v0.54.0
