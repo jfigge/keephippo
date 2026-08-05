@@ -13,6 +13,17 @@ BUILD_DIR  := $(CURDIR)/build
 DIST_DIR   := $(CURDIR)/dist
 VERPKG     := $(MODULE)/internal/version
 
+# ---- dev tool versions ----
+# Pinned deliberately: these are the single source of truth for local dev *and*
+# CI (.github/workflows/ci.yml runs `make tools`), so everyone runs identical
+# linters and a lint/format failure reproduces locally. Floating `@latest` used
+# to turn CI red on unrelated commits whenever a tool cut a release.
+# Bump these intentionally, in their own commit, and re-run `make fmt lint`.
+GOFUMPT_VERSION     := v0.11.0
+GOLANGCI_VERSION    := v2.12.2
+GOVULNCHECK_VERSION := v1.6.0
+GORELEASER_VERSION  := v2.17.1
+
 # Make tools installed by `make install` (gofumpt, golangci-lint, govulncheck,
 # goreleaser) discoverable even when the Go bin dir is not on the user's PATH.
 GOBIN := $(shell $(GO) env GOBIN)
@@ -41,7 +52,7 @@ LDFLAGS    := -s -w \
 
 .DEFAULT_GOAL := all
 
-.PHONY: all help version info install debug dev fmt fmt-check lint test e2e compat vuln \
+.PHONY: all help version info tools install debug dev fmt fmt-check lint test e2e compat vuln \
 	build build-mac build-linux build-win dist dist-mac dist-linux dist-win \
 	sign-mac sign-win release dev-certs icons ui docs docs-images site clean
 
@@ -64,12 +75,14 @@ info: ## Print version + branch + commit + build time
 	@echo "go:         $$($(GO) version)"
 
 # ---- dev ----
-install: ## Download deps and install dev tools (gofumpt, golangci-lint, govulncheck, goreleaser)
+tools: ## Install the pinned quality tools (gofumpt, golangci-lint, govulncheck) — used by CI
+	$(GO) install mvdan.cc/gofumpt@$(GOFUMPT_VERSION)
+	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+	$(GO) install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+
+install: tools ## Download deps and install dev tools (gofumpt, golangci-lint, govulncheck, goreleaser)
 	$(GO) -C $(SRC) mod download
-	$(GO) install mvdan.cc/gofumpt@latest
-	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-	$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
-	$(GO) install github.com/goreleaser/goreleaser/v2@latest
+	$(GO) install github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION)
 
 debug: ## Run a dev server (in-mem storage, auto-unsealed)
 	$(GO) -C $(SRC) run $(PKG) server --dev
@@ -189,7 +202,7 @@ docs: ## Run the docs checks (command coverage, image dimensions, links)
 	@$(GO) -C $(SRC) test ./internal/command/ -run TestUserGuide -count=1
 
 site: ## Build the marketing/docs website into website/ (needs Node + marked)
-	npm install
+	npm ci
 	npm run build:site
 	@$(GO) -C $(SRC) test ./internal/command/ -run TestWebsite -count=1
 

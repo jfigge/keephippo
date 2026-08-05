@@ -25,11 +25,11 @@ jobs:
           cache: true
           cache-dependency-path: src/go.sum
 
+      # Versions are pinned in the Makefile (GOFUMPT_VERSION etc.) so CI and
+      # local dev run byte-identical tools — bump them there, not here.
       - name: Install tools
         run: |
-          go install mvdan.cc/gofumpt@latest
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          make tools
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: fmt-check

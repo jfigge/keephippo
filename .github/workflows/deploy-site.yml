@@ -30,8 +30,10 @@ jobs:
         with:
           node-version: 20
 
+      # `npm ci` (not `npm install`) so the site builds from package-lock.json
+      # exactly and a new `marked` release can't change the generated docs.
       - name: Install site build deps
-        run: npm install
+        run: npm ci
 
       - name: Generate versions.json (latest GitHub Release)
         run: node scripts/build-versions.mjs
